@@ -1,20 +1,28 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { api } from "../../../lib/api";
 
 type Member = {
   id: number;
-  userName: string;
+  name: string;
 };
 
-export default function GroupPage({
-  params,
-}: {
-  params: { groupId: string };
-}) {
-  const groupId = Number(params.groupId);
+type GroupResponse = {
+  id: number;
+  name: string;
+  members: Member[];
+};
+
+export default function GroupPage() {
+  const pathname = usePathname();
+  const groupId = useMemo(() => {
+    if (!pathname) return NaN;
+    const parts = pathname.split("/").filter(Boolean);
+    return Number(parts[1]);
+  }, [pathname]);
 
   const [members, setMembers] = useState<Member[]>([]);
   const [userName, setUserName] = useState("");
@@ -22,50 +30,46 @@ export default function GroupPage({
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  async function loadMembers() {
-    setError(null);
-    setLoadingMembers(true);
-    try {
-      // Must match your backend endpoint
-      const res = await api<Member[]>(`/groups/${groupId}/members`);
-      setMembers(res);
-    } catch (e: unknown) {
-      if (e instanceof Error) {
-        setError(e.message ?? "Failed to load members");
-      } else {
-        setError(String(e) || "Failed to load members");
-      }
-    } finally {
-      setLoadingMembers(false);
-    }
+  async function loadGroup(gid: number) {
+  setError(null);
+  setLoadingMembers(true);
+  try {
+    const group = await api<GroupResponse>(`/groups/${gid}`);
+    setMembers(group.members ?? []);
+  } catch (e: unknown) {
+    if (e instanceof Error) setError(e.message ?? "Failed to load group");
+    else setError(String(e) || "Failed to load group");
+  } finally {
+    setLoadingMembers(false);
   }
+}
 
   useEffect(() => {
-    if (Number.isFinite(groupId)) loadMembers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (!Number.isFinite(groupId) || groupId <= 0) return;
+    loadGroup(groupId);
   }, [groupId]);
 
+
   async function addMember() {
+    if (!Number.isFinite(groupId) || groupId <= 0) return;
     setError(null);
     setLoading(true);
     try {
-      // Must match your backend endpoint
-      await api<void>(`/groups/${groupId}/members`, {
+      await api<{ userId: number; name: string }>(`/groups/${groupId}/members`, {
         method: "POST",
         body: JSON.stringify({ userName }),
       });
       setUserName("");
-      await loadMembers();
+      await loadGroup(groupId);
     } catch (e: unknown) {
-      if (e instanceof Error) {
-        setError(e.message ?? "Failed to add member");
-      } else {
-        setError(String(e) || "Failed to add member");
-      }
+      if (e instanceof Error) setError(e.message ?? "Failed to add member");
+      else setError(String(e) || "Failed to add member");
     } finally {
       setLoading(false);
     }
   }
+
+
   return (
     <main className="min-h-screen p-6 max-w-2xl mx-auto">
       <Link href="/" className="text-sm underline">
@@ -73,8 +77,9 @@ export default function GroupPage({
       </Link>
 
       <div className="mt-4">
-        <h1 className="text-2xl font-semibold">Group #{groupId}</h1>
-        <h1 className="text-2xl font-semibold">Group #{groupId}</h1>
+        <h1 className="text-2xl font-semibold">
+          Group {Number.isFinite(groupId) ? `#${groupId}` : ""}
+        </h1>
         <p className="text-sm text-gray-500">
           Add members first (then we’ll do expenses & settlements).
         </p>
@@ -92,7 +97,7 @@ export default function GroupPage({
           />
           <button
             onClick={addMember}
-            disabled={!userName.trim() || loading}
+            disabled={!userName.trim() || loading || !Number.isFinite(groupId)}
             className="rounded-xl border px-4 py-2 disabled:opacity-50"
           >
             {loading ? "Adding..." : "Add"}
@@ -113,7 +118,7 @@ export default function GroupPage({
           <ul className="mt-3 space-y-2">
             {members.map((m) => (
               <li key={m.id} className="rounded-xl border px-3 py-2">
-                <div className="font-medium">{m.userName}</div>
+                <div className="font-medium">{m.name}</div>
                 <div className="text-xs text-gray-500">id: {m.id}</div>
               </li>
             ))}
