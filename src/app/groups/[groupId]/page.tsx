@@ -51,11 +51,19 @@ export default function GroupPage() {
   const [desc, setDesc] = useState("");
   const [amount, setAmount] = useState<string>("");
   const [paidByUserId, setPaidByUserId] = useState<number | "">("");
+  const [splitMode, setSplitMode] = useState<"equal" | "exact" | "percentage">(
+    "equal",
+  );
+  const [exactAmounts, setExactAmounts] = useState<Record<number, string>>({});
+  const [percentages, setPercentages] = useState<Record<number, string>>({});
 
   const [settlements, setSettlements] = useState<SettlementTransfer[]>([]);
   const [loadingExpenses, setLoadingExpenses] = useState(false);
   const [loadingSettlements, setLoadingSettlements] = useState(false);
   const [paidTransfers, setPaidTransfers] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [confirmingTransfers, setConfirmingTransfers] = useState<Set<string>>(
     () => new Set(),
   );
 
@@ -70,8 +78,50 @@ export default function GroupPage() {
     return `${transfer.fromUserId}-${transfer.toUserId}-${transfer.amount.toFixed(2)}`;
   }
 
-  function togglePaidTransfer(transfer: SettlementTransfer) {
+  async function togglePaidTransfer(transfer: SettlementTransfer) {
     const key = getTransferKey(transfer);
+    if (confirmingTransfers.has(key)) return;
+    const isPaid = paidTransfers.has(key);
+    if (!isPaid) {
+      setConfirmingTransfers((prev) => new Set(prev).add(key));
+      try {
+        await api<void>(`/groups/${groupId}/settlements/confirm`, {
+          method: "POST",
+          body: JSON.stringify({
+            transfers: [
+              {
+                fromUserId: transfer.fromUserId,
+                toUserId: transfer.toUserId,
+                amount: transfer.amount,
+              },
+            ],
+          }),
+        });
+        if (Number.isFinite(groupId)) {
+          await loadSettlements(groupId);
+        }
+        setPaidTransfers((prev) => {
+          const next = new Set(prev);
+          next.delete(key);
+          return next;
+        });
+      } catch (e: unknown) {
+        setError(
+          e instanceof Error ? e.message : "Failed to confirm transfer",
+        );
+        setConfirmingTransfers((prev) => {
+          const next = new Set(prev);
+          next.delete(key);
+          return next;
+        });
+        return;
+      }
+      setConfirmingTransfers((prev) => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+    }
     setPaidTransfers((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
@@ -182,7 +232,48 @@ export default function GroupPage() {
     setLoading(true);
     const participantUserIds = members.map((m) => m.id);
     if (participantUserIds.length === 0) return;
-    const shares = participantUserIds.map(() => 1);
+    const shares = splitMode === "equal" ? participantUserIds.map(() => 1) : [];
+    const exactAmountList =
+      splitMode === "exact"
+        ? participantUserIds.map((id) => Number(exactAmounts[id] ?? ""))
+        : [];
+    const percentageList =
+      splitMode === "percentage"
+        ? participantUserIds.map((id) => Number(percentages[id] ?? ""))
+        : [];
+
+    if (
+      splitMode === "exact" &&
+      exactAmountList.some((val) => !Number.isFinite(val))
+    ) {
+      setError("Enter an exact amount for each member.");
+      setLoading(false);
+      return;
+    }
+    if (
+      splitMode === "percentage" &&
+      percentageList.some((val) => !Number.isFinite(val))
+    ) {
+      setError("Enter a percentage for each member.");
+      setLoading(false);
+      return;
+    }
+    if (splitMode === "exact") {
+      const exactSum = exactAmountList.reduce((sum, val) => sum + val, 0);
+      if (Math.abs(exactSum - amt) > 0.01) {
+        setError("Exact amounts must add up to the total.");
+        setLoading(false);
+        return;
+      }
+    }
+    if (splitMode === "percentage") {
+      const percentageSum = percentageList.reduce((sum, val) => sum + val, 0);
+      if (Math.abs(percentageSum - 100) > 0.01) {
+        setError("Percentages must add up to 100%.");
+        setLoading(false);
+        return;
+      }
+    }
 
     try {
       await api<void>(`/groups/${groupId}/expenses`, {
@@ -193,13 +284,16 @@ export default function GroupPage() {
           payerUserId: paidByUserId,
           participantUserIds,
           shares,
-          exactAmounts: [],
-          percentages: [],
+          exactAmounts: exactAmountList,
+          percentages: percentageList,
         }),
       });
 
       setDesc("");
       setAmount("");
+      setExactAmounts({});
+      setPercentages({});
+      setSplitMode("equal");
 
       await Promise.all([loadExpenses(groupId), loadSettlements(groupId)]);
     } catch (e: unknown) {
@@ -356,10 +450,84 @@ export default function GroupPage() {
             </button>
           </div>
 
-          <p className="text-xs text-slate-500">
-            MVP: backend splits equally among all members (we’ll add
-            item/percentage splits later).
-          </p>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <select
+              className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2"
+              value={splitMode}
+              onChange={(e) =>
+                setSplitMode(e.target.value as "equal" | "exact" | "percentage")
+              }
+            >
+              <option value="equal">Equal split</option>
+              <option value="exact">Exact amounts</option>
+              <option value="percentage">Percentages</option>
+            </select>
+          </div>
+
+          {splitMode === "exact" && (
+            <div className="rounded-xl border border-slate-200 bg-white p-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                Exact amounts
+              </p>
+              <div className="mt-3 space-y-2">
+                {members.map((member) => (
+                  <div
+                    key={member.id}
+                    className="flex flex-col gap-2 sm:flex-row sm:items-center"
+                  >
+                    <span className="text-sm font-medium text-slate-900 sm:w-48">
+                      {getMemberName(member)}
+                    </span>
+                    <input
+                      className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                      placeholder="0.00"
+                      inputMode="decimal"
+                      value={exactAmounts[member.id] ?? ""}
+                      onChange={(e) =>
+                        setExactAmounts((prev) => ({
+                          ...prev,
+                          [member.id]: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {splitMode === "percentage" && (
+            <div className="rounded-xl border border-slate-200 bg-white p-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                Percentages
+              </p>
+              <div className="mt-3 space-y-2">
+                {members.map((member) => (
+                  <div
+                    key={member.id}
+                    className="flex flex-col gap-2 sm:flex-row sm:items-center"
+                  >
+                    <span className="text-sm font-medium text-slate-900 sm:w-48">
+                      {getMemberName(member)}
+                    </span>
+                    <input
+                      className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                      placeholder="0"
+                      inputMode="decimal"
+                      value={percentages[member.id] ?? ""}
+                      onChange={(e) =>
+                        setPercentages((prev) => ({
+                          ...prev,
+                          [member.id]: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
         </div>
       </div>
 
@@ -500,8 +668,13 @@ export default function GroupPage() {
                             : "border-slate-200 bg-white text-slate-600"
                         }`}
                         onClick={() => togglePaidTransfer(s)}
+                        disabled={confirmingTransfers.has(transferKey)}
                       >
-                        {isPaid ? "Paid" : "Mark paid"}
+                        {confirmingTransfers.has(transferKey)
+                          ? "Confirming..."
+                          : isPaid
+                            ? "Paid"
+                            : "Mark paid"}
                       </button>
                       <button
                         type="button"
