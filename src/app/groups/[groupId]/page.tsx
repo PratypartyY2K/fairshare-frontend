@@ -78,56 +78,39 @@ export default function GroupPage() {
     return `${transfer.fromUserId}-${transfer.toUserId}-${transfer.amount.toFixed(2)}`;
   }
 
-  async function togglePaidTransfer(transfer: SettlementTransfer) {
+  async function confirmPaidTransfer(transfer: SettlementTransfer) {
     const key = getTransferKey(transfer);
     if (confirmingTransfers.has(key)) return;
     const isPaid = paidTransfers.has(key);
-    if (!isPaid) {
-      setConfirmingTransfers((prev) => new Set(prev).add(key));
-      try {
-        await api<void>(`/groups/${groupId}/settlements/confirm`, {
-          method: "POST",
-          body: JSON.stringify({
-            transfers: [
-              {
-                fromUserId: transfer.fromUserId,
-                toUserId: transfer.toUserId,
-                amount: transfer.amount,
-              },
-            ],
-          }),
-        });
-        if (Number.isFinite(groupId)) {
-          await loadSettlements(groupId);
-        }
-        setPaidTransfers((prev) => {
-          const next = new Set(prev);
-          next.delete(key);
-          return next;
-        });
-      } catch (e: unknown) {
-        setError(
-          e instanceof Error ? e.message : "Failed to confirm transfer",
-        );
-        setConfirmingTransfers((prev) => {
-          const next = new Set(prev);
-          next.delete(key);
-          return next;
-        });
-        return;
+    if (isPaid) return;
+
+    setConfirmingTransfers((prev) => new Set(prev).add(key));
+    try {
+      await api<void>(`/groups/${groupId}/settlements/confirm`, {
+        method: "POST",
+        body: JSON.stringify({
+          transfers: [
+            {
+              fromUserId: transfer.fromUserId,
+              toUserId: transfer.toUserId,
+              amount: transfer.amount,
+            },
+          ],
+        }),
+      });
+      if (Number.isFinite(groupId)) {
+        await loadSettlements(groupId);
       }
+      setPaidTransfers((prev) => new Set(prev).add(key));
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to confirm transfer");
+    } finally {
       setConfirmingTransfers((prev) => {
         const next = new Set(prev);
         next.delete(key);
         return next;
       });
     }
-    setPaidTransfers((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
   }
 
   async function loadGroup(gid: number) {
@@ -383,18 +366,20 @@ export default function GroupPage() {
             No members yet. Add someone to get started.
           </p>
         ) : (
-          <ul className="mt-4 space-y-2">
-            {members.map((m) => (
-              <li
-                key={m.id}
-                className="rounded-xl border border-slate-200 bg-white px-3 py-2"
-              >
-                <div className="text-sm font-medium text-slate-900">
-                  {getMemberName(m)}
-                </div>
-              </li>
-            ))}
-          </ul>
+          <div className="mt-4 max-h-56 overflow-y-auto pr-1">
+            <ul className="space-y-2">
+              {members.map((m) => (
+                <li
+                  key={m.id}
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2"
+                >
+                  <div className="text-sm font-medium text-slate-900">
+                    {getMemberName(m)}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </div>
 
@@ -543,34 +528,38 @@ export default function GroupPage() {
             No expenses yet. Add the first one above.
           </p>
         ) : (
-          <ul className="mt-4 space-y-3">
-            {expenses.map((ex, index) => (
-              <li
-                key={`${ex.id ?? "new"}-${ex.payerUserId}-${ex.amount}-${ex.createdAt ?? index}`}
-                className="rounded-xl border border-slate-200 bg-white px-3 py-3"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-medium text-slate-900">
-                      {ex.description}
+          <div className="mt-4 max-h-72 overflow-y-auto pr-1">
+            <ul className="space-y-3">
+              {expenses.map((ex, index) => (
+                <li
+                  key={`${ex.id ?? "new"}-${ex.payerUserId}-${ex.amount}-${ex.createdAt ?? index}`}
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-3"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-medium text-slate-900">
+                        {ex.description}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        Paid by{" "}
+                        {(() => {
+                          const member = members.find(
+                            (m) => m.id === ex.payerUserId,
+                          );
+                          return member
+                            ? getMemberName(member)
+                            : "Unknown member";
+                        })()}
+                      </div>
                     </div>
-                    <div className="text-xs text-slate-500">
-                      Paid by{" "}
-                      {(() => {
-                        const member = members.find(
-                          (m) => m.id === ex.payerUserId,
-                        );
-                        return member ? getMemberName(member) : "Unknown member";
-                      })()}
+                    <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-sm font-semibold">
+                      ${Number(ex.amount).toFixed(2)}
                     </div>
                   </div>
-                  <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-sm font-semibold">
-                    ${Number(ex.amount).toFixed(2)}
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </div>
 
@@ -612,87 +601,86 @@ export default function GroupPage() {
             });
 
             return (
-          <ul className="mt-4 space-y-3">
-            {sortedTransfers.map((s) => {
-              const fromMember = members.find((m) => m.id === s.fromUserId);
-              const toMember = members.find((m) => m.id === s.toUserId);
-              const fromLabel = fromMember
-                ? getMemberName(fromMember)
-                : "Unknown member";
-              const toLabel = toMember
-                ? getMemberName(toMember)
-                : "Unknown member";
-              const transferKey = getTransferKey(s);
-              const isPaid = paidTransfers.has(transferKey);
-              return (
-                <li
-                  key={transferKey}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-3"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex flex-col gap-1 text-sm">
-                      <span className="text-xs uppercase tracking-wide text-slate-500">
-                        Transfer
-                      </span>
-                      <span
-                        className={`text-sm font-medium ${
-                          isPaid
-                            ? "text-slate-400 line-through"
-                            : "text-slate-900"
-                        }`}
-                      >
-                        <span
-                          className={isPaid ? "text-slate-400" : "text-rose-700"}
-                        >
-                          {fromLabel}
-                        </span>{" "}
-                        pays{" "}
-                        <span
-                          className={
-                            isPaid ? "text-slate-400" : "text-emerald-700"
+          <div className="mt-4 max-h-80 overflow-y-auto pr-1">
+            <ul className="space-y-3">
+              {sortedTransfers.map((s) => {
+                const fromMember = members.find((m) => m.id === s.fromUserId);
+                const toMember = members.find((m) => m.id === s.toUserId);
+                const fromLabel = fromMember
+                  ? getMemberName(fromMember)
+                  : "Unknown member";
+                const toLabel = toMember
+                  ? getMemberName(toMember)
+                  : "Unknown member";
+                const transferKey = getTransferKey(s);
+                const isPaid = paidTransfers.has(transferKey);
+                return (
+                  <li
+                    key={transferKey}
+                    className={`rounded-xl border px-3 py-3 ${
+                      isPaid
+                        ? "border-emerald-200 bg-emerald-50/60"
+                        : "border-slate-200 bg-white"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex flex-col gap-1 text-sm">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs uppercase tracking-wide text-slate-500">
+                            Transfer
+                          </span>
+                          {isPaid && (
+                            <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                              Confirmed
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-sm font-medium text-slate-900">
+                          <span className="text-rose-700">{fromLabel}</span>{" "}
+                          pays{" "}
+                          <span className="text-emerald-700">{toLabel}</span>
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-sm font-semibold">
+                          ${Number(s.amount).toFixed(2)}
+                        </span>
+                        <button
+                          type="button"
+                          className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                            isPaid
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                              : "border-slate-200 bg-white text-slate-600"
+                          }`}
+                          onClick={() => confirmPaidTransfer(s)}
+                          disabled={
+                            isPaid || confirmingTransfers.has(transferKey)
                           }
                         >
-                          {toLabel}
-                        </span>
-                      </span>
+                          {confirmingTransfers.has(transferKey)
+                            ? "Confirming..."
+                            : isPaid
+                              ? "Confirmed"
+                              : "Mark paid"}
+                        </button>
+                        <button
+                          type="button"
+                          className="text-xs font-medium text-slate-600 underline"
+                          onClick={() =>
+                            navigator.clipboard.writeText(
+                              `${fromLabel} pays ${toLabel} $${Number(s.amount).toFixed(2)}`
+                            )
+                          }
+                        >
+                          Copy
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-sm font-semibold">
-                        ${Number(s.amount).toFixed(2)}
-                      </span>
-                      <button
-                        type="button"
-                        className={`rounded-full border px-3 py-1 text-xs font-medium ${
-                          isPaid
-                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                            : "border-slate-200 bg-white text-slate-600"
-                        }`}
-                        onClick={() => togglePaidTransfer(s)}
-                        disabled={confirmingTransfers.has(transferKey)}
-                      >
-                        {confirmingTransfers.has(transferKey)
-                          ? "Confirming..."
-                          : isPaid
-                            ? "Paid"
-                            : "Mark paid"}
-                      </button>
-                      <button
-                        type="button"
-                        className="text-xs font-medium text-slate-600 underline"
-                        onClick={() =>
-                          navigator.clipboard.writeText(
-                            `${fromLabel} pays ${toLabel} $${Number(s.amount).toFixed(2)}`
-                          )
-                        }
-                      >
-                        Copy
-                      </button>
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
             );
           })()
         )}
