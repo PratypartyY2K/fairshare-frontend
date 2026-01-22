@@ -25,9 +25,10 @@ type Expense = {
   createdAt?: string;
 };
 
-type SettlementEntry = {
-  userId: number;
-  netBalance: number;
+type SettlementTransfer = {
+  fromUserId: number;
+  toUserId: number;
+  amount: number;
 };
 
 export default function GroupPage() {
@@ -51,7 +52,7 @@ export default function GroupPage() {
   const [amount, setAmount] = useState<string>("");
   const [paidByUserId, setPaidByUserId] = useState<number | "">("");
 
-  const [settlements, setSettlements] = useState<SettlementEntry[]>([]);
+  const [settlements, setSettlements] = useState<SettlementTransfer[]>([]);
   const [loadingExpenses, setLoadingExpenses] = useState(false);
   const [loadingSettlements, setLoadingSettlements] = useState(false);
 
@@ -141,10 +142,10 @@ export default function GroupPage() {
   async function loadSettlements(gid: number) {
     setLoadingSettlements(true);
     try {
-      const res = await api<{ entries: SettlementEntry[] }>(
+      const res = await api<{ transfers: SettlementTransfer[] }>(
         `/groups/${gid}/settlements`,
       );
-      setSettlements(res.entries ?? []);
+      setSettlements(res.transfers ?? []);
     } finally {
       setLoadingSettlements(false);
     }
@@ -371,22 +372,20 @@ export default function GroupPage() {
         ) : (
           <ul className="mt-3 space-y-2">
             {settlements.map((s) => {
-              const member = members.find((m) => m.id === s.userId);
+              const fromMember = members.find((m) => m.id === s.fromUserId);
+              const toMember = members.find((m) => m.id === s.toUserId);
               return (
                 <li
-                  key={s.userId}
-                  className="rounded-xl border px-3 py-2 flex justify-between"
+                  key={`${s.fromUserId}-${s.toUserId}-${s.amount}`}
+                  className="rounded-xl border px-3 py-2 flex items-center justify-between gap-3"
                 >
                   <span className="font-medium">
-                    {member ? getMemberName(member) : `User ${s.userId}`}
+                    {fromMember ? getMemberName(fromMember) : `User ${s.fromUserId}`}
+                    {" → "}
+                    {toMember ? getMemberName(toMember) : `User ${s.toUserId}`}
                   </span>
-                  <span
-                    className={
-                      s.netBalance >= 0 ? "text-green-700" : "text-red-700"
-                    }
-                  >
-                    {s.netBalance >= 0 ? "+" : ""}
-                    {Number(s.netBalance).toFixed(2)}
+                  <span className="font-semibold">
+                    ${Number(s.amount).toFixed(2)}
                   </span>
                 </li>
               );
