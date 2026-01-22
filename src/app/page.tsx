@@ -18,7 +18,6 @@ export default function HomePage() {
     setError(null);
     setLoading(true);
     try {
-      // Update path/body to match your backend endpoint
       const res = await api<CreateGroupResponse>("/groups", {
         method: "POST",
         body: JSON.stringify({ name: groupName }),
@@ -27,9 +26,11 @@ export default function HomePage() {
       setGroupName("");
     } catch (e: unknown) {
       if (e instanceof Error) {
-        setError(e.message ?? "Failed to create group");
+        setError(e.message);
+      } else if (typeof e === "string") {
+        setError(e);
       } else {
-        setError(String(e) || "Failed to create group");
+        setError("Failed to create group");
       }
     } finally {
       setLoading(false);
@@ -67,10 +68,7 @@ export default function HomePage() {
         {createdGroupId !== null && (
           <div className="mt-4 text-sm">
             Created group:{" "}
-            <a
-              className="underline"
-              href={`/groups/${createdGroupId}`}
-            >
+            <a className="underline" href={`/groups/${createdGroupId}`}>
               Open group #{createdGroupId}
             </a>
           </div>
