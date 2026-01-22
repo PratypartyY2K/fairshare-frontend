@@ -355,7 +355,12 @@ export default function GroupPage() {
       </div>
       <div className="mt-6 rounded-2xl border p-4">
         <div className="flex items-center justify-between">
-          <h2 className="font-medium">Net balances</h2>
+          <div>
+            <h2 className="font-medium">Settle up</h2>
+            <p className="text-xs text-gray-500">
+              Suggested transfers to square everyone up.
+            </p>
+          </div>
           <button
             className="text-sm underline"
             onClick={() => Number.isFinite(groupId) && loadSettlements(groupId)}
@@ -368,29 +373,73 @@ export default function GroupPage() {
         {loadingSettlements ? (
           <p className="mt-3 text-sm text-gray-500">Loading...</p>
         ) : settlements.length === 0 ? (
-          <p className="mt-3 text-sm text-gray-500">No balances yet.</p>
+          <p className="mt-3 text-sm text-gray-500">
+            No transfers needed right now.
+          </p>
         ) : (
-          <ul className="mt-3 space-y-2">
-            {settlements.map((s) => {
+          (() => {
+            const sortedTransfers = [...settlements].sort((a, b) => {
+              if (a.fromUserId !== b.fromUserId) {
+                return a.fromUserId - b.fromUserId;
+              }
+              if (a.toUserId !== b.toUserId) {
+                return a.toUserId - b.toUserId;
+              }
+              return a.amount - b.amount;
+            });
+
+            return (
+          <ul className="mt-4 space-y-3">
+            {sortedTransfers.map((s) => {
               const fromMember = members.find((m) => m.id === s.fromUserId);
               const toMember = members.find((m) => m.id === s.toUserId);
               return (
                 <li
                   key={`${s.fromUserId}-${s.toUserId}-${s.amount}`}
-                  className="rounded-xl border px-3 py-2 flex items-center justify-between gap-3"
+                  className="rounded-xl border px-3 py-3"
                 >
-                  <span className="font-medium">
-                    {fromMember ? getMemberName(fromMember) : `User ${s.fromUserId}`}
-                    {" → "}
-                    {toMember ? getMemberName(toMember) : `User ${s.toUserId}`}
-                  </span>
-                  <span className="font-semibold">
-                    ${Number(s.amount).toFixed(2)}
-                  </span>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex flex-col gap-1 text-sm">
+                      <span className="text-xs uppercase tracking-wide text-gray-500">
+                        Transfer
+                      </span>
+                      <span className="font-medium">
+                        <span className="text-red-700">
+                          {fromMember
+                            ? getMemberName(fromMember)
+                            : `User ${s.fromUserId}`}
+                        </span>{" "}
+                        pays{" "}
+                        <span className="text-green-700">
+                          {toMember
+                            ? getMemberName(toMember)
+                            : `User ${s.toUserId}`}
+                        </span>
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-full border px-3 py-1 text-sm font-semibold">
+                        ${Number(s.amount).toFixed(2)}
+                      </span>
+                      <button
+                        type="button"
+                        className="text-xs underline"
+                        onClick={() =>
+                          navigator.clipboard.writeText(
+                            `${fromMember ? getMemberName(fromMember) : `User ${s.fromUserId}`} pays ${toMember ? getMemberName(toMember) : `User ${s.toUserId}`} $${Number(s.amount).toFixed(2)}`
+                          )
+                        }
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  </div>
                 </li>
               );
             })}
           </ul>
+            );
+          })()
         )}
       </div>
     </main>
