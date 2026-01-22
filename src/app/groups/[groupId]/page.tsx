@@ -55,9 +55,29 @@ export default function GroupPage() {
   const [settlements, setSettlements] = useState<SettlementTransfer[]>([]);
   const [loadingExpenses, setLoadingExpenses] = useState(false);
   const [loadingSettlements, setLoadingSettlements] = useState(false);
+  const [paidTransfers, setPaidTransfers] = useState<Set<string>>(
+    () => new Set(),
+  );
+
+  const cardClassName =
+    "rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm backdrop-blur";
 
   function getMemberName(member: Member) {
     return member.name?.trim() || member.userName?.trim() || "Member";
+  }
+
+  function getTransferKey(transfer: SettlementTransfer) {
+    return `${transfer.fromUserId}-${transfer.toUserId}-${transfer.amount.toFixed(2)}`;
+  }
+
+  function togglePaidTransfer(transfer: SettlementTransfer) {
+    const key = getTransferKey(transfer);
+    setPaidTransfers((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   }
 
   async function loadGroup(gid: number) {
@@ -162,6 +182,7 @@ export default function GroupPage() {
     setLoading(true);
     const participantUserIds = members.map((m) => m.id);
     if (participantUserIds.length === 0) return;
+    const shares = participantUserIds.map(() => 1);
 
     try {
       await api<void>(`/groups/${groupId}/expenses`, {
@@ -171,6 +192,9 @@ export default function GroupPage() {
           amount: amt,
           payerUserId: paidByUserId,
           participantUserIds,
+          shares,
+          exactAmounts: [],
+          percentages: [],
         }),
       });
 
@@ -187,27 +211,36 @@ export default function GroupPage() {
   }
 
   return (
-    <main className="min-h-screen p-6 max-w-2xl mx-auto">
-      <Link href="/" className="text-sm underline">
+    <main className="min-h-screen bg-gradient-to-br from-amber-50 via-rose-50 to-orange-50 p-6 text-slate-900">
+      <div className="mx-auto flex max-w-3xl flex-col gap-6">
+      <Link href="/" className="text-sm font-medium text-slate-600 underline">
         ← Back
       </Link>
 
-      <div className="mt-4">
-        <h1 className="text-2xl font-semibold">
+      <div className="mt-2">
+        <h1 className="text-3xl font-semibold tracking-tight">
           {groupName?.trim()
             ? groupName
             : `Group ${Number.isFinite(groupId) ? `#${groupId}` : ""}`}
         </h1>
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-slate-600">
           Add members first (then we’ll do expenses & settlements).
         </p>
       </div>
 
-      <div className="mt-6 rounded-2xl border p-4">
-        <h2 className="font-medium">Rename group</h2>
-        <div className="mt-3 flex gap-2">
+      {error && (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {error}
+        </div>
+      )}
+
+      <div className={cardClassName}>
+        <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+          Rename group
+        </h2>
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
           <input
-            className="flex-1 rounded-xl border px-3 py-2 outline-none"
+            className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none"
             placeholder="Group name"
             value={editingGroupName}
             onChange={(e) => setEditingGroupName(e.target.value)}
@@ -215,19 +248,21 @@ export default function GroupPage() {
           <button
             onClick={saveGroupName}
             disabled={savingGroupName || !editingGroupName.trim()}
-            className="rounded-xl border px-4 py-2 disabled:opacity-50"
+            className="rounded-xl border border-slate-300 bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
             {savingGroupName ? "Saving..." : "Save"}
           </button>
         </div>
       </div>
 
-      <div className="mt-6 rounded-2xl border p-4">
-        <h2 className="font-medium">Add a member</h2>
+      <div className={cardClassName}>
+        <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+          Add a member
+        </h2>
 
-        <div className="mt-3 flex gap-2">
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
           <input
-            className="flex-1 rounded-xl border px-3 py-2 outline-none"
+            className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none"
             placeholder="e.g., Alice"
             value={userName}
             onChange={(e) => setUserName(e.target.value)}
@@ -235,46 +270,56 @@ export default function GroupPage() {
           <button
             onClick={addMember}
             disabled={!userName.trim() || loading || !Number.isFinite(groupId)}
-            className="rounded-xl border px-4 py-2 disabled:opacity-50"
+            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading ? "Adding..." : "Add"}
           </button>
         </div>
-
-        {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
       </div>
 
-      <div className="mt-6 rounded-2xl border p-4">
-        <h2 className="font-medium">Members</h2>
+      <div className={cardClassName}>
+        <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+          Members
+        </h2>
 
         {loadingMembers ? (
-          <p className="mt-3 text-sm text-gray-500">Loading...</p>
+          <p className="mt-3 text-sm text-slate-500">Loading...</p>
         ) : members.length === 0 ? (
-          <p className="mt-3 text-sm text-gray-500">No members yet.</p>
+          <p className="mt-3 text-sm text-slate-500">
+            No members yet. Add someone to get started.
+          </p>
         ) : (
-          <ul className="mt-3 space-y-2">
+          <ul className="mt-4 space-y-2">
             {members.map((m) => (
-              <li key={m.id} className="rounded-xl border px-3 py-2">
-                <div className="font-medium">{getMemberName(m)}</div>
+              <li
+                key={m.id}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2"
+              >
+                <div className="text-sm font-medium text-slate-900">
+                  {getMemberName(m)}
+                </div>
               </li>
             ))}
           </ul>
         )}
       </div>
-      <div className="mt-6 rounded-2xl border p-4">
-        <h2 className="font-medium">Add expense</h2>
 
-        <div className="mt-3 grid grid-cols-1 gap-2">
+      <div className={cardClassName}>
+        <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+          Add expense
+        </h2>
+
+        <div className="mt-3 grid grid-cols-1 gap-3">
           <input
-            className="rounded-xl border px-3 py-2 outline-none"
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none"
             placeholder="Description (e.g., Groceries)"
             value={desc}
             onChange={(e) => setDesc(e.target.value)}
           />
 
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <input
-              className="flex-1 rounded-xl border px-3 py-2 outline-none"
+              className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none"
               placeholder="Amount (e.g., 42.50)"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
@@ -282,7 +327,7 @@ export default function GroupPage() {
             />
 
             <select
-              className="flex-1 rounded-xl border px-3 py-2"
+              className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2"
               value={paidByUserId}
               onChange={(e) =>
                 setPaidByUserId(e.target.value ? Number(e.target.value) : "")
@@ -305,37 +350,44 @@ export default function GroupPage() {
                 paidByUserId === "" ||
                 members.length === 0
               }
-              className="rounded-xl border px-4 py-2 disabled:opacity-50"
+              className="rounded-xl border border-slate-300 bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading ? "Saving..." : "Add"}
             </button>
           </div>
 
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-slate-500">
             MVP: backend splits equally among all members (we’ll add
             item/percentage splits later).
           </p>
         </div>
       </div>
-      <div className="mt-6 rounded-2xl border p-4">
-        <h2 className="font-medium">Expenses</h2>
+
+      <div className={cardClassName}>
+        <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+          Expenses
+        </h2>
 
         {loadingExpenses ? (
-          <p className="mt-3 text-sm text-gray-500">Loading...</p>
+          <p className="mt-3 text-sm text-slate-500">Loading...</p>
         ) : expenses.length === 0 ? (
-          <p className="mt-3 text-sm text-gray-500">No expenses yet.</p>
+          <p className="mt-3 text-sm text-slate-500">
+            No expenses yet. Add the first one above.
+          </p>
         ) : (
-          <ul className="mt-3 space-y-2">
+          <ul className="mt-4 space-y-3">
             {expenses.map((ex, index) => (
               <li
                 key={`${ex.id ?? "new"}-${ex.payerUserId}-${ex.amount}-${ex.createdAt ?? index}`}
-                className="rounded-xl border px-3 py-2"
+                className="rounded-xl border border-slate-200 bg-white px-3 py-3"
               >
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <div className="font-medium">{ex.description}</div>
-                    <div className="text-xs text-gray-500">
-                      paid by{" "}
+                    <div className="text-sm font-medium text-slate-900">
+                      {ex.description}
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      Paid by{" "}
                       {(() => {
                         const member = members.find(
                           (m) => m.id === ex.payerUserId,
@@ -344,7 +396,7 @@ export default function GroupPage() {
                       })()}
                     </div>
                   </div>
-                  <div className="font-semibold">
+                  <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-sm font-semibold">
                     ${Number(ex.amount).toFixed(2)}
                   </div>
                 </div>
@@ -353,16 +405,19 @@ export default function GroupPage() {
           </ul>
         )}
       </div>
-      <div className="mt-6 rounded-2xl border p-4">
+
+      <div className={cardClassName}>
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="font-medium">Settle up</h2>
-            <p className="text-xs text-gray-500">
+            <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+              Settle up
+            </h2>
+            <p className="mt-1 text-xs text-slate-500">
               Suggested transfers to square everyone up.
             </p>
           </div>
           <button
-            className="text-sm underline"
+            className="text-xs font-medium text-slate-600 underline"
             onClick={() => Number.isFinite(groupId) && loadSettlements(groupId)}
             disabled={loadingSettlements}
           >
@@ -371,9 +426,9 @@ export default function GroupPage() {
         </div>
 
         {loadingSettlements ? (
-          <p className="mt-3 text-sm text-gray-500">Loading...</p>
+          <p className="mt-3 text-sm text-slate-500">Loading...</p>
         ) : settlements.length === 0 ? (
-          <p className="mt-3 text-sm text-gray-500">
+          <p className="mt-3 text-sm text-slate-500">
             No transfers needed right now.
           </p>
         ) : (
@@ -393,40 +448,67 @@ export default function GroupPage() {
             {sortedTransfers.map((s) => {
               const fromMember = members.find((m) => m.id === s.fromUserId);
               const toMember = members.find((m) => m.id === s.toUserId);
+              const fromLabel = fromMember
+                ? getMemberName(fromMember)
+                : "Unknown member";
+              const toLabel = toMember
+                ? getMemberName(toMember)
+                : "Unknown member";
+              const transferKey = getTransferKey(s);
+              const isPaid = paidTransfers.has(transferKey);
               return (
                 <li
-                  key={`${s.fromUserId}-${s.toUserId}-${s.amount}`}
-                  className="rounded-xl border px-3 py-3"
+                  key={transferKey}
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-3"
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex flex-col gap-1 text-sm">
-                      <span className="text-xs uppercase tracking-wide text-gray-500">
+                      <span className="text-xs uppercase tracking-wide text-slate-500">
                         Transfer
                       </span>
-                      <span className="font-medium">
-                        <span className="text-red-700">
-                          {fromMember
-                            ? getMemberName(fromMember)
-                            : `User ${s.fromUserId}`}
+                      <span
+                        className={`text-sm font-medium ${
+                          isPaid
+                            ? "text-slate-400 line-through"
+                            : "text-slate-900"
+                        }`}
+                      >
+                        <span
+                          className={isPaid ? "text-slate-400" : "text-rose-700"}
+                        >
+                          {fromLabel}
                         </span>{" "}
                         pays{" "}
-                        <span className="text-green-700">
-                          {toMember
-                            ? getMemberName(toMember)
-                            : `User ${s.toUserId}`}
+                        <span
+                          className={
+                            isPaid ? "text-slate-400" : "text-emerald-700"
+                          }
+                        >
+                          {toLabel}
                         </span>
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="rounded-full border px-3 py-1 text-sm font-semibold">
+                      <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-sm font-semibold">
                         ${Number(s.amount).toFixed(2)}
                       </span>
                       <button
                         type="button"
-                        className="text-xs underline"
+                        className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                          isPaid
+                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                            : "border-slate-200 bg-white text-slate-600"
+                        }`}
+                        onClick={() => togglePaidTransfer(s)}
+                      >
+                        {isPaid ? "Paid" : "Mark paid"}
+                      </button>
+                      <button
+                        type="button"
+                        className="text-xs font-medium text-slate-600 underline"
                         onClick={() =>
                           navigator.clipboard.writeText(
-                            `${fromMember ? getMemberName(fromMember) : `User ${s.fromUserId}`} pays ${toMember ? getMemberName(toMember) : `User ${s.toUserId}`} $${Number(s.amount).toFixed(2)}`
+                            `${fromLabel} pays ${toLabel} $${Number(s.amount).toFixed(2)}`
                           )
                         }
                       >
@@ -441,6 +523,7 @@ export default function GroupPage() {
             );
           })()
         )}
+      </div>
       </div>
     </main>
   );
