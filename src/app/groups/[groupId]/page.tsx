@@ -7,13 +7,27 @@ import { api } from "../../../lib/api";
 
 type Member = {
   id: number;
-  name: string;
+  name?: string;
+  userName?: string;
 };
 
 type GroupResponse = {
   id: number;
-  name: string;
+  name?: string;
   members: Member[];
+};
+
+type Expense = {
+  id: number;
+  description: string;
+  amount: number;
+  payerUserId: number;
+  createdAt?: string;
+};
+
+type SettlementEntry = {
+  userId: number;
+  netBalance: number;
 };
 
 export default function GroupPage() {
@@ -29,36 +43,56 @@ export default function GroupPage() {
   const [loading, setLoading] = useState(false);
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [groupName, setGroupName] = useState<string | null>(null);
+  const [editingGroupName, setEditingGroupName] = useState("");
+  const [savingGroupName, setSavingGroupName] = useState(false);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [desc, setDesc] = useState("");
+  const [amount, setAmount] = useState<string>("");
+  const [paidByUserId, setPaidByUserId] = useState<number | "">("");
+
+  const [settlements, setSettlements] = useState<SettlementEntry[]>([]);
+  const [loadingExpenses, setLoadingExpenses] = useState(false);
+  const [loadingSettlements, setLoadingSettlements] = useState(false);
+
+  function getMemberName(member: Member) {
+    return member.name?.trim() || member.userName?.trim() || "Member";
+  }
 
   async function loadGroup(gid: number) {
-  setError(null);
-  setLoadingMembers(true);
-  try {
-    const group = await api<GroupResponse>(`/groups/${gid}`);
-    setMembers(group.members ?? []);
-  } catch (e: unknown) {
-    if (e instanceof Error) setError(e.message ?? "Failed to load group");
-    else setError(String(e) || "Failed to load group");
-  } finally {
-    setLoadingMembers(false);
+    setError(null);
+    setLoadingMembers(true);
+    try {
+      const group = await api<GroupResponse>(`/groups/${gid}`);
+      setMembers(group.members ?? []);
+      setGroupName(group.name ?? null);
+    } catch (e: unknown) {
+      if (e instanceof Error) setError(e.message ?? "Failed to load group");
+      else setError(String(e) || "Failed to load group");
+    } finally {
+      setLoadingMembers(false);
+    }
   }
-}
 
   useEffect(() => {
     if (!Number.isFinite(groupId) || groupId <= 0) return;
     loadGroup(groupId);
+    loadExpenses(groupId);
+    loadSettlements(groupId);
   }, [groupId]);
-
 
   async function addMember() {
     if (!Number.isFinite(groupId) || groupId <= 0) return;
     setError(null);
     setLoading(true);
     try {
-      await api<{ userId: number; name: string }>(`/groups/${groupId}/members`, {
-        method: "POST",
-        body: JSON.stringify({ userName }),
-      });
+      await api<{ userId: number; name: string }>(
+        `/groups/${groupId}/members`,
+        {
+          method: "POST",
+          body: JSON.stringify({ userName }),
+        },
+      );
       setUserName("");
       await loadGroup(groupId);
     } catch (e: unknown) {
@@ -69,6 +103,87 @@ export default function GroupPage() {
     }
   }
 
+  async function saveGroupName() {
+    if (!Number.isFinite(groupId) || groupId <= 0) return;
+    const trimmedName = editingGroupName.trim();
+    if (!trimmedName) {
+      setError("Group name cannot be empty");
+      return;
+    }
+
+    setError(null);
+    setSavingGroupName(true);
+    try {
+      await api<void>(`/groups/${groupId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ name: trimmedName }),
+      });
+      setGroupName(trimmedName);
+      setEditingGroupName("");
+    } catch (e: unknown) {
+      if (e instanceof Error) setError(e.message ?? "Failed to update group");
+      else setError(String(e) || "Failed to update group");
+    } finally {
+      setSavingGroupName(false);
+    }
+  }
+
+  async function loadExpenses(gid: number) {
+    setLoadingExpenses(true);
+    try {
+      const res = await api<Expense[]>(`/groups/${gid}/expenses`);
+      setExpenses(res);
+    } finally {
+      setLoadingExpenses(false);
+    }
+  }
+
+  async function loadSettlements(gid: number) {
+    setLoadingSettlements(true);
+    try {
+      const res = await api<{ entries: SettlementEntry[] }>(
+        `/groups/${gid}/settlements`,
+      );
+      setSettlements(res.entries ?? []);
+    } finally {
+      setLoadingSettlements(false);
+    }
+  }
+
+  async function addExpense() {
+    if (!Number.isFinite(groupId)) return;
+    if (!desc.trim()) return;
+    const amt = Number(amount);
+    if (!Number.isFinite(amt) || amt <= 0) return;
+    if (paidByUserId === "") return;
+
+    setError(null);
+    setLoading(true);
+    const participantUserIds = members.map((m) => m.id);
+    if (participantUserIds.length === 0) return;
+
+    try {
+      await api<void>(`/groups/${groupId}/expenses`, {
+        method: "POST",
+        body: JSON.stringify({
+          description: desc,
+          amount: amt,
+          payerUserId: paidByUserId,
+          participantUserIds,
+        }),
+      });
+
+      setDesc("");
+      setAmount("");
+
+      await Promise.all([loadExpenses(groupId), loadSettlements(groupId)]);
+    } catch (e: unknown) {
+      if (e instanceof Error) setError(e.message ?? "Failed to add expense");
+      else setError(String(e) || "Failed to add expense");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <main className="min-h-screen p-6 max-w-2xl mx-auto">
@@ -78,11 +193,32 @@ export default function GroupPage() {
 
       <div className="mt-4">
         <h1 className="text-2xl font-semibold">
-          Group {Number.isFinite(groupId) ? `#${groupId}` : ""}
+          {groupName?.trim()
+            ? groupName
+            : `Group ${Number.isFinite(groupId) ? `#${groupId}` : ""}`}
         </h1>
         <p className="text-sm text-gray-500">
           Add members first (then we’ll do expenses & settlements).
         </p>
+      </div>
+
+      <div className="mt-6 rounded-2xl border p-4">
+        <h2 className="font-medium">Rename group</h2>
+        <div className="mt-3 flex gap-2">
+          <input
+            className="flex-1 rounded-xl border px-3 py-2 outline-none"
+            placeholder="Group name"
+            value={editingGroupName}
+            onChange={(e) => setEditingGroupName(e.target.value)}
+          />
+          <button
+            onClick={saveGroupName}
+            disabled={savingGroupName || !editingGroupName.trim()}
+            className="rounded-xl border px-4 py-2 disabled:opacity-50"
+          >
+            {savingGroupName ? "Saving..." : "Save"}
+          </button>
+        </div>
       </div>
 
       <div className="mt-6 rounded-2xl border p-4">
@@ -118,10 +254,143 @@ export default function GroupPage() {
           <ul className="mt-3 space-y-2">
             {members.map((m) => (
               <li key={m.id} className="rounded-xl border px-3 py-2">
-                <div className="font-medium">{m.name}</div>
-                <div className="text-xs text-gray-500">id: {m.id}</div>
+                <div className="font-medium">{getMemberName(m)}</div>
               </li>
             ))}
+          </ul>
+        )}
+      </div>
+      <div className="mt-6 rounded-2xl border p-4">
+        <h2 className="font-medium">Add expense</h2>
+
+        <div className="mt-3 grid grid-cols-1 gap-2">
+          <input
+            className="rounded-xl border px-3 py-2 outline-none"
+            placeholder="Description (e.g., Groceries)"
+            value={desc}
+            onChange={(e) => setDesc(e.target.value)}
+          />
+
+          <div className="flex gap-2">
+            <input
+              className="flex-1 rounded-xl border px-3 py-2 outline-none"
+              placeholder="Amount (e.g., 42.50)"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              inputMode="decimal"
+            />
+
+            <select
+              className="flex-1 rounded-xl border px-3 py-2"
+              value={paidByUserId}
+              onChange={(e) =>
+                setPaidByUserId(e.target.value ? Number(e.target.value) : "")
+              }
+            >
+              <option value="">Paid by...</option>
+              {members.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {getMemberName(m)}
+                </option>
+              ))}
+            </select>
+
+            <button
+              onClick={addExpense}
+              disabled={
+                loading ||
+                !desc.trim() ||
+                !amount ||
+                paidByUserId === "" ||
+                members.length === 0
+              }
+              className="rounded-xl border px-4 py-2 disabled:opacity-50"
+            >
+              {loading ? "Saving..." : "Add"}
+            </button>
+          </div>
+
+          <p className="text-xs text-gray-500">
+            MVP: backend splits equally among all members (we’ll add
+            item/percentage splits later).
+          </p>
+        </div>
+      </div>
+      <div className="mt-6 rounded-2xl border p-4">
+        <h2 className="font-medium">Expenses</h2>
+
+        {loadingExpenses ? (
+          <p className="mt-3 text-sm text-gray-500">Loading...</p>
+        ) : expenses.length === 0 ? (
+          <p className="mt-3 text-sm text-gray-500">No expenses yet.</p>
+        ) : (
+          <ul className="mt-3 space-y-2">
+            {expenses.map((ex, index) => (
+              <li
+                key={`${ex.id ?? "new"}-${ex.payerUserId}-${ex.amount}-${ex.createdAt ?? index}`}
+                className="rounded-xl border px-3 py-2"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="font-medium">{ex.description}</div>
+                    <div className="text-xs text-gray-500">
+                      paid by{" "}
+                      {(() => {
+                        const member = members.find(
+                          (m) => m.id === ex.payerUserId,
+                        );
+                        return member ? getMemberName(member) : "Unknown member";
+                      })()}
+                    </div>
+                  </div>
+                  <div className="font-semibold">
+                    ${Number(ex.amount).toFixed(2)}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <div className="mt-6 rounded-2xl border p-4">
+        <div className="flex items-center justify-between">
+          <h2 className="font-medium">Net balances</h2>
+          <button
+            className="text-sm underline"
+            onClick={() => Number.isFinite(groupId) && loadSettlements(groupId)}
+            disabled={loadingSettlements}
+          >
+            {loadingSettlements ? "Refreshing..." : "Refresh"}
+          </button>
+        </div>
+
+        {loadingSettlements ? (
+          <p className="mt-3 text-sm text-gray-500">Loading...</p>
+        ) : settlements.length === 0 ? (
+          <p className="mt-3 text-sm text-gray-500">No balances yet.</p>
+        ) : (
+          <ul className="mt-3 space-y-2">
+            {settlements.map((s) => {
+              const member = members.find((m) => m.id === s.userId);
+              return (
+                <li
+                  key={s.userId}
+                  className="rounded-xl border px-3 py-2 flex justify-between"
+                >
+                  <span className="font-medium">
+                    {member ? getMemberName(member) : `User ${s.userId}`}
+                  </span>
+                  <span
+                    className={
+                      s.netBalance >= 0 ? "text-green-700" : "text-red-700"
+                    }
+                  >
+                    {s.netBalance >= 0 ? "+" : ""}
+                    {Number(s.netBalance).toFixed(2)}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
