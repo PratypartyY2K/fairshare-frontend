@@ -19,16 +19,24 @@ export default function GroupPage({
   const [members, setMembers] = useState<Member[]>([]);
   const [userName, setUserName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingMembers, setLoadingMembers] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   async function loadMembers() {
     setError(null);
+    setLoadingMembers(true);
     try {
-      // Update this path to match your backend
+      // Must match your backend endpoint
       const res = await api<Member[]>(`/groups/${groupId}/members`);
       setMembers(res);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to load members");
+      if (e instanceof Error) {
+        setError(e.message ?? "Failed to load members");
+      } else {
+        setError(String(e) || "Failed to load members");
+      }
+    } finally {
+      setLoadingMembers(false);
     }
   }
 
@@ -38,9 +46,10 @@ export default function GroupPage({
   }, [groupId]);
 
   async function addMember() {
-    setLoading(true);
     setError(null);
+    setLoading(true);
     try {
+      // Must match your backend endpoint
       await api<void>(`/groups/${groupId}/members`, {
         method: "POST",
         body: JSON.stringify({ userName }),
@@ -48,19 +57,31 @@ export default function GroupPage({
       setUserName("");
       await loadMembers();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to add member");
+      if (e instanceof Error) {
+        setError(e.message ?? "Failed to add member");
+      } else {
+        setError(String(e) || "Failed to add member");
+      }
     } finally {
       setLoading(false);
     }
   }
   return (
     <main className="min-h-screen p-6 max-w-2xl mx-auto">
-      <Link href="/" className="text-sm underline">← Back</Link>
-      <h1 className="text-2xl font-semibold mt-3">Group #{groupId}</h1>
-      <h1 className="text-2xl font-semibold mt-3">Group #{groupId}</h1>
+      <Link href="/" className="text-sm underline">
+        ← Back
+      </Link>
+
+      <div className="mt-4">
+        <h1 className="text-2xl font-semibold">Group #{groupId}</h1>
+        <h1 className="text-2xl font-semibold">Group #{groupId}</h1>
+        <p className="text-sm text-gray-500">
+          Add members first (then we’ll do expenses & settlements).
+        </p>
+      </div>
 
       <div className="mt-6 rounded-2xl border p-4">
-        <h2 className="font-medium">Members</h2>
+        <h2 className="font-medium">Add a member</h2>
 
         <div className="mt-3 flex gap-2">
           <input
@@ -79,18 +100,25 @@ export default function GroupPage({
         </div>
 
         {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+      </div>
 
-        <ul className="mt-4 space-y-2">
-          {members.map((m) => (
-            <li key={m.id} className="rounded-xl border px-3 py-2">
-              <div className="font-medium">{m.userName}</div>
-              <div className="text-xs text-gray-500">id: {m.id}</div>
-            </li>
-          ))}
-          {members.length === 0 && (
-            <li className="text-sm text-gray-500">No members yet.</li>
-          )}
-        </ul>
+      <div className="mt-6 rounded-2xl border p-4">
+        <h2 className="font-medium">Members</h2>
+
+        {loadingMembers ? (
+          <p className="mt-3 text-sm text-gray-500">Loading...</p>
+        ) : members.length === 0 ? (
+          <p className="mt-3 text-sm text-gray-500">No members yet.</p>
+        ) : (
+          <ul className="mt-3 space-y-2">
+            {members.map((m) => (
+              <li key={m.id} className="rounded-xl border px-3 py-2">
+                <div className="font-medium">{m.userName}</div>
+                <div className="text-xs text-gray-500">id: {m.id}</div>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </main>
   );
