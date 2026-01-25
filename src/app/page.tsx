@@ -23,6 +23,9 @@ export default function HomePage() {
   const [editingGroupName, setEditingGroupName] = useState("");
   const [savingGroupId, setSavingGroupId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [rootStatus, setRootStatus] = useState<string | null>(null);
+  const [healthStatus, setHealthStatus] = useState<string | null>(null);
+  const [loadingStatus, setLoadingStatus] = useState(true);
 
   async function loadGroups() {
     setError(null);
@@ -43,7 +46,26 @@ export default function HomePage() {
 
   useEffect(() => {
     void loadGroups();
+    void loadStatus();
   }, []);
+
+  async function loadStatus() {
+    setLoadingStatus(true);
+    try {
+      const [rootRes, healthRes] = await Promise.all([
+        api<Record<string, string>>("/"),
+        api<Record<string, string>>("/health"),
+      ]);
+      setRootStatus(Object.values(rootRes ?? {}).join(" ") || "OK");
+      setHealthStatus(Object.values(healthRes ?? {}).join(" ") || "OK");
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Status unavailable";
+      setRootStatus(message);
+      setHealthStatus(message);
+    } finally {
+      setLoadingStatus(false);
+    }
+  }
 
   async function onCreateGroup() {
     setError(null);
@@ -138,6 +160,23 @@ export default function HomePage() {
             </a>
           </div>
         )}
+      </div>
+
+      <div className="mt-6 rounded-2xl border p-4">
+        <div className="flex items-center justify-between">
+          <h2 className="font-medium">API status</h2>
+          <button
+            onClick={loadStatus}
+            className="text-sm underline"
+            disabled={loadingStatus}
+          >
+            {loadingStatus ? "Refreshing..." : "Refresh"}
+          </button>
+        </div>
+        <div className="mt-3 space-y-2 text-sm text-gray-600">
+          <div>Root (/): {loadingStatus ? "Loading..." : rootStatus}</div>
+          <div>Health (/health): {loadingStatus ? "Loading..." : healthStatus}</div>
+        </div>
       </div>
 
       <div className="mt-6 rounded-2xl border p-4">

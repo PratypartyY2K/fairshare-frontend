@@ -17,18 +17,49 @@ type GroupResponse = {
   members: Member[];
 };
 
+type Split = {
+  userId: number;
+  shareAmount: number;
+};
+
 type Expense = {
-  id: number;
+  expenseId: number;
+  groupId: number;
   description: string;
   amount: number;
   payerUserId: number;
   createdAt?: string;
+  splits?: Split[];
 };
 
 type SettlementTransfer = {
   fromUserId: number;
   toUserId: number;
   amount: number;
+};
+
+type LedgerEntry = {
+  userId: number;
+  netBalance: number;
+};
+
+type EventResponse = {
+  eventId: number;
+  groupId: number;
+  expenseId?: number;
+  eventType: string;
+  payload: string;
+  createdAt: string;
+};
+
+type ConfirmedTransfer = {
+  id: number;
+  groupId: number;
+  fromUserId: number;
+  toUserId: number;
+  amount: number;
+  confirmationId?: string;
+  createdAt: string;
 };
 
 export default function GroupPage() {
@@ -51,21 +82,64 @@ export default function GroupPage() {
   const [desc, setDesc] = useState("");
   const [amount, setAmount] = useState<string>("");
   const [paidByUserId, setPaidByUserId] = useState<number | "">("");
-  const [splitMode, setSplitMode] = useState<"equal" | "exact" | "percentage">(
-    "equal",
-  );
+  const [splitMode, setSplitMode] = useState<
+    "equal" | "exact" | "percentage" | "shares"
+  >("equal");
   const [exactAmounts, setExactAmounts] = useState<Record<number, string>>({});
   const [percentages, setPercentages] = useState<Record<number, string>>({});
+  const [shares, setShares] = useState<Record<number, string>>({});
+  const [idempotencyKey, setIdempotencyKey] = useState("");
 
   const [settlements, setSettlements] = useState<SettlementTransfer[]>([]);
   const [loadingExpenses, setLoadingExpenses] = useState(false);
   const [loadingSettlements, setLoadingSettlements] = useState(false);
+  const [confirmationId, setConfirmationId] = useState("");
   const [paidTransfers, setPaidTransfers] = useState<Set<string>>(
     () => new Set(),
   );
   const [confirmingTransfers, setConfirmingTransfers] = useState<Set<string>>(
     () => new Set(),
   );
+
+  const [editingExpenseId, setEditingExpenseId] = useState<number | null>(null);
+  const [editDesc, setEditDesc] = useState("");
+  const [editAmount, setEditAmount] = useState<string>("");
+  const [editPaidByUserId, setEditPaidByUserId] = useState<number | "">("");
+  const [editSplitMode, setEditSplitMode] = useState<
+    "equal" | "exact" | "percentage" | "shares"
+  >("equal");
+  const [editExactAmounts, setEditExactAmounts] = useState<
+    Record<number, string>
+  >({});
+  const [editPercentages, setEditPercentages] = useState<
+    Record<number, string>
+  >({});
+  const [editShares, setEditShares] = useState<Record<number, string>>({});
+  const [updatingExpense, setUpdatingExpense] = useState(false);
+  const [deletingExpenseId, setDeletingExpenseId] = useState<number | null>(
+    null,
+  );
+
+  const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([]);
+  const [loadingLedger, setLoadingLedger] = useState(false);
+
+  const [events, setEvents] = useState<EventResponse[]>([]);
+  const [loadingEvents, setLoadingEvents] = useState(false);
+
+  const [confirmedTransfers, setConfirmedTransfers] = useState<
+    ConfirmedTransfer[]
+  >([]);
+  const [loadingConfirmedTransfers, setLoadingConfirmedTransfers] =
+    useState(false);
+  const [confirmedFilter, setConfirmedFilter] = useState("");
+
+  const [owesFromUserId, setOwesFromUserId] = useState<number | "">("");
+  const [owesToUserId, setOwesToUserId] = useState<number | "">("");
+  const [owesAmount, setOwesAmount] = useState<number | null>(null);
+  const [owesHistoricalAmount, setOwesHistoricalAmount] = useState<
+    number | null
+  >(null);
+  const [loadingOwes, setLoadingOwes] = useState(false);
 
   const cardClassName =
     "rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm backdrop-blur";
@@ -76,6 +150,16 @@ export default function GroupPage() {
 
   function getTransferKey(transfer: SettlementTransfer) {
     return `${transfer.fromUserId}-${transfer.toUserId}-${transfer.amount.toFixed(2)}`;
+  }
+
+  function buildMemberValueMap(
+    membersList: Member[],
+    seed: Record<number, string> = {},
+  ) {
+    return membersList.reduce<Record<number, string>>((acc, member) => {
+      acc[member.id] = seed[member.id] ?? "";
+      return acc;
+    }, {});
   }
 
   async function confirmPaidTransfer(transfer: SettlementTransfer) {
@@ -89,6 +173,7 @@ export default function GroupPage() {
       await api<void>(`/groups/${groupId}/settlements/confirm`, {
         method: "POST",
         body: JSON.stringify({
+          confirmationId: confirmationId.trim() || undefined,
           transfers: [
             {
               fromUserId: transfer.fromUserId,
@@ -135,6 +220,15 @@ export default function GroupPage() {
     loadSettlements(groupId);
   }, [groupId]);
 
+  useEffect(() => {
+    setExactAmounts((prev) => buildMemberValueMap(members, prev));
+    setPercentages((prev) => buildMemberValueMap(members, prev));
+    setShares((prev) => buildMemberValueMap(members, prev));
+    setEditExactAmounts((prev) => buildMemberValueMap(members, prev));
+    setEditPercentages((prev) => buildMemberValueMap(members, prev));
+    setEditShares((prev) => buildMemberValueMap(members, prev));
+  }, [members]);
+
   async function addMember() {
     if (!Number.isFinite(groupId) || groupId <= 0) return;
     setError(null);
@@ -168,11 +262,12 @@ export default function GroupPage() {
     setError(null);
     setSavingGroupName(true);
     try {
-      await api<void>(`/groups/${groupId}`, {
+      const res = await api<GroupResponse>(`/groups/${groupId}`, {
         method: "PATCH",
         body: JSON.stringify({ name: trimmedName }),
       });
-      setGroupName(trimmedName);
+      setGroupName(res.name ?? trimmedName);
+      setMembers(res.members ?? []);
       setEditingGroupName("");
     } catch (e: unknown) {
       if (e instanceof Error) setError(e.message ?? "Failed to update group");
@@ -204,6 +299,69 @@ export default function GroupPage() {
     }
   }
 
+  async function loadLedger(gid: number) {
+    setLoadingLedger(true);
+    try {
+      const res = await api<{ entries: LedgerEntry[] }>(
+        `/groups/${gid}/ledger`,
+      );
+      setLedgerEntries(res.entries ?? []);
+    } finally {
+      setLoadingLedger(false);
+    }
+  }
+
+  async function loadEvents(gid: number) {
+    setLoadingEvents(true);
+    try {
+      const res = await api<EventResponse[]>(`/groups/${gid}/events`);
+      setEvents(res ?? []);
+    } finally {
+      setLoadingEvents(false);
+    }
+  }
+
+  async function loadConfirmedTransfers(gid: number) {
+    setLoadingConfirmedTransfers(true);
+    try {
+      const query = confirmedFilter.trim()
+        ? `?confirmationId=${encodeURIComponent(confirmedFilter.trim())}`
+        : "";
+      const res = await api<ConfirmedTransfer[]>(
+        `/groups/${gid}/confirmed-transfers${query}`,
+      );
+      setConfirmedTransfers(res ?? []);
+    } finally {
+      setLoadingConfirmedTransfers(false);
+    }
+  }
+
+  async function loadOwes(gid: number) {
+    if (owesFromUserId === "" || owesToUserId === "") return;
+    setLoadingOwes(true);
+    try {
+      const res = await api<{ amount: number }>(
+        `/groups/${gid}/owes?fromUserId=${owesFromUserId}&toUserId=${owesToUserId}`,
+      );
+      setOwesAmount(res.amount);
+    } finally {
+      setLoadingOwes(false);
+    }
+  }
+
+  async function loadOwesHistorical(gid: number) {
+    if (owesFromUserId === "" || owesToUserId === "") return;
+    setLoadingOwes(true);
+    try {
+      const res = await api<{ amount: number }>(
+        `/groups/${gid}/owes/historical?fromUserId=${owesFromUserId}&toUserId=${owesToUserId}`,
+      );
+      setOwesHistoricalAmount(res.amount);
+    } finally {
+      setLoadingOwes(false);
+    }
+  }
+
   async function addExpense() {
     if (!Number.isFinite(groupId)) return;
     if (!desc.trim()) return;
@@ -214,8 +372,14 @@ export default function GroupPage() {
     setError(null);
     setLoading(true);
     const participantUserIds = members.map((m) => m.id);
-    if (participantUserIds.length === 0) return;
-    const shares = splitMode === "equal" ? participantUserIds.map(() => 1) : [];
+    if (participantUserIds.length === 0) {
+      setLoading(false);
+      return;
+    }
+    const sharesList =
+      splitMode === "shares"
+        ? participantUserIds.map((id) => Number(shares[id] ?? ""))
+        : [];
     const exactAmountList =
       splitMode === "exact"
         ? participantUserIds.map((id) => Number(exactAmounts[id] ?? ""))
@@ -241,6 +405,14 @@ export default function GroupPage() {
       setLoading(false);
       return;
     }
+    if (
+      splitMode === "shares" &&
+      sharesList.some((val) => !Number.isFinite(val) || val < 1)
+    ) {
+      setError("Enter a share count (>= 1) for each member.");
+      setLoading(false);
+      return;
+    }
     if (splitMode === "exact") {
       const exactSum = exactAmountList.reduce((sum, val) => sum + val, 0);
       if (Math.abs(exactSum - amt) > 0.01) {
@@ -259,24 +431,31 @@ export default function GroupPage() {
     }
 
     try {
+      const payload: Record<string, unknown> = {
+        description: desc,
+        amount: amt,
+        payerUserId: paidByUserId,
+        participantUserIds,
+      };
+      if (splitMode === "shares") payload.shares = sharesList;
+      if (splitMode === "exact") payload.exactAmounts = exactAmountList;
+      if (splitMode === "percentage") payload.percentages = percentageList;
+
       await api<void>(`/groups/${groupId}/expenses`, {
         method: "POST",
-        body: JSON.stringify({
-          description: desc,
-          amount: amt,
-          payerUserId: paidByUserId,
-          participantUserIds,
-          shares,
-          exactAmounts: exactAmountList,
-          percentages: percentageList,
-        }),
+        headers: idempotencyKey.trim()
+          ? { "Idempotency-Key": idempotencyKey.trim() }
+          : undefined,
+        body: JSON.stringify(payload),
       });
 
       setDesc("");
       setAmount("");
       setExactAmounts({});
       setPercentages({});
+      setShares({});
       setSplitMode("equal");
+      setIdempotencyKey("");
 
       await Promise.all([loadExpenses(groupId), loadSettlements(groupId)]);
     } catch (e: unknown) {
@@ -284,6 +463,147 @@ export default function GroupPage() {
       else setError(String(e) || "Failed to add expense");
     } finally {
       setLoading(false);
+    }
+  }
+
+  function startEditExpense(expense: Expense) {
+    setEditingExpenseId(expense.expenseId);
+    setEditDesc(expense.description ?? "");
+    setEditAmount(String(expense.amount ?? ""));
+    setEditPaidByUserId(expense.payerUserId ?? "");
+    setEditSplitMode("exact");
+    const splitSeed = (expense.splits ?? []).reduce<Record<number, string>>(
+      (acc, split) => {
+        acc[split.userId] = String(split.shareAmount);
+        return acc;
+      },
+      {},
+    );
+    setEditExactAmounts(buildMemberValueMap(members, splitSeed));
+    setEditPercentages(buildMemberValueMap(members));
+    setEditShares(buildMemberValueMap(members, splitSeed));
+  }
+
+  function resetEditExpense() {
+    setEditingExpenseId(null);
+    setEditDesc("");
+    setEditAmount("");
+    setEditPaidByUserId("");
+    setEditSplitMode("equal");
+    setEditExactAmounts({});
+    setEditPercentages({});
+    setEditShares({});
+  }
+
+  async function updateExpense() {
+    if (!Number.isFinite(groupId) || editingExpenseId === null) return;
+    if (!editDesc.trim()) return;
+    const amt = Number(editAmount);
+    if (!Number.isFinite(amt) || amt <= 0) return;
+    if (editPaidByUserId === "") return;
+
+    setError(null);
+    setUpdatingExpense(true);
+    const participantUserIds = members.map((m) => m.id);
+    if (participantUserIds.length === 0) {
+      setUpdatingExpense(false);
+      return;
+    }
+    const sharesList =
+      editSplitMode === "shares"
+        ? participantUserIds.map((id) => Number(editShares[id] ?? ""))
+        : [];
+    const exactAmountList =
+      editSplitMode === "exact"
+        ? participantUserIds.map((id) => Number(editExactAmounts[id] ?? ""))
+        : [];
+    const percentageList =
+      editSplitMode === "percentage"
+        ? participantUserIds.map((id) => Number(editPercentages[id] ?? ""))
+        : [];
+
+    if (
+      editSplitMode === "exact" &&
+      exactAmountList.some((val) => !Number.isFinite(val))
+    ) {
+      setError("Enter an exact amount for each member.");
+      setUpdatingExpense(false);
+      return;
+    }
+    if (
+      editSplitMode === "percentage" &&
+      percentageList.some((val) => !Number.isFinite(val))
+    ) {
+      setError("Enter a percentage for each member.");
+      setUpdatingExpense(false);
+      return;
+    }
+    if (
+      editSplitMode === "shares" &&
+      sharesList.some((val) => !Number.isFinite(val) || val < 1)
+    ) {
+      setError("Enter a share count (>= 1) for each member.");
+      setUpdatingExpense(false);
+      return;
+    }
+    if (editSplitMode === "exact") {
+      const exactSum = exactAmountList.reduce((sum, val) => sum + val, 0);
+      if (Math.abs(exactSum - amt) > 0.01) {
+        setError("Exact amounts must add up to the total.");
+        setUpdatingExpense(false);
+        return;
+      }
+    }
+    if (editSplitMode === "percentage") {
+      const percentageSum = percentageList.reduce((sum, val) => sum + val, 0);
+      if (Math.abs(percentageSum - 100) > 0.01) {
+        setError("Percentages must add up to 100%.");
+        setUpdatingExpense(false);
+        return;
+      }
+    }
+
+    try {
+      const payload: Record<string, unknown> = {
+        description: editDesc,
+        amount: amt,
+        payerUserId: editPaidByUserId,
+        participantUserIds,
+      };
+      if (editSplitMode === "shares") payload.shares = sharesList;
+      if (editSplitMode === "exact") payload.exactAmounts = exactAmountList;
+      if (editSplitMode === "percentage") payload.percentages = percentageList;
+
+      await api<void>(
+        `/groups/${groupId}/expenses/${editingExpenseId}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify(payload),
+        },
+      );
+      await Promise.all([loadExpenses(groupId), loadSettlements(groupId)]);
+      resetEditExpense();
+    } catch (e: unknown) {
+      if (e instanceof Error) setError(e.message ?? "Failed to update expense");
+      else setError(String(e) || "Failed to update expense");
+    } finally {
+      setUpdatingExpense(false);
+    }
+  }
+
+  async function deleteExpense(expenseId: number) {
+    if (!Number.isFinite(groupId)) return;
+    setDeletingExpenseId(expenseId);
+    try {
+      await api<void>(`/groups/${groupId}/expenses/${expenseId}`, {
+        method: "DELETE",
+      });
+      await Promise.all([loadExpenses(groupId), loadSettlements(groupId)]);
+    } catch (e: unknown) {
+      if (e instanceof Error) setError(e.message ?? "Failed to delete expense");
+      else setError(String(e) || "Failed to delete expense");
+    } finally {
+      setDeletingExpenseId(null);
     }
   }
 
@@ -396,6 +716,13 @@ export default function GroupPage() {
             onChange={(e) => setDesc(e.target.value)}
           />
 
+          <input
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+            placeholder="Idempotency key (optional)"
+            value={idempotencyKey}
+            onChange={(e) => setIdempotencyKey(e.target.value)}
+          />
+
           <div className="flex flex-col gap-2 sm:flex-row">
             <input
               className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none"
@@ -440,12 +767,15 @@ export default function GroupPage() {
               className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2"
               value={splitMode}
               onChange={(e) =>
-                setSplitMode(e.target.value as "equal" | "exact" | "percentage")
+                setSplitMode(
+                  e.target.value as "equal" | "exact" | "percentage" | "shares",
+                )
               }
             >
               <option value="equal">Equal split</option>
               <option value="exact">Exact amounts</option>
               <option value="percentage">Percentages</option>
+              <option value="shares">Shares</option>
             </select>
           </div>
 
@@ -513,6 +843,37 @@ export default function GroupPage() {
             </div>
           )}
 
+          {splitMode === "shares" && (
+            <div className="rounded-xl border border-slate-200 bg-white p-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                Shares
+              </p>
+              <div className="mt-3 space-y-2">
+                {members.map((member) => (
+                  <div
+                    key={member.id}
+                    className="flex flex-col gap-2 sm:flex-row sm:items-center"
+                  >
+                    <span className="text-sm font-medium text-slate-900 sm:w-48">
+                      {getMemberName(member)}
+                    </span>
+                    <input
+                      className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                      placeholder="1"
+                      inputMode="numeric"
+                      value={shares[member.id] ?? ""}
+                      onChange={(e) =>
+                        setShares((prev) => ({
+                          ...prev,
+                          [member.id]: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -532,10 +893,10 @@ export default function GroupPage() {
             <ul className="space-y-3">
               {expenses.map((ex, index) => (
                 <li
-                  key={`${ex.id ?? "new"}-${ex.payerUserId}-${ex.amount}-${ex.createdAt ?? index}`}
+                  key={`${ex.expenseId ?? "new"}-${ex.payerUserId}-${ex.amount}-${ex.createdAt ?? index}`}
                   className="rounded-xl border border-slate-200 bg-white px-3 py-3"
                 >
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-start justify-between gap-3">
                     <div>
                       <div className="text-sm font-medium text-slate-900">
                         {ex.description}
@@ -551,9 +912,47 @@ export default function GroupPage() {
                             : "Unknown member";
                         })()}
                       </div>
+                      {ex.splits && ex.splits.length > 0 && (
+                        <div className="mt-2 space-y-1 text-xs text-slate-500">
+                          {ex.splits.map((split) => {
+                            const member = members.find(
+                              (m) => m.id === split.userId,
+                            );
+                            const label = member
+                              ? getMemberName(member)
+                              : `User #${split.userId}`;
+                            return (
+                              <div key={`${ex.expenseId}-${split.userId}`}>
+                                {label}: ${Number(split.shareAmount).toFixed(2)}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
-                    <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-sm font-semibold">
-                      ${Number(ex.amount).toFixed(2)}
+                    <div className="flex flex-col items-end gap-2">
+                      <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-sm font-semibold">
+                        ${Number(ex.amount).toFixed(2)}
+                      </div>
+                      <div className="flex items-center gap-2 text-xs">
+                        <button
+                          type="button"
+                          className="underline"
+                          onClick={() => startEditExpense(ex)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="text-rose-600 underline"
+                          disabled={deletingExpenseId === ex.expenseId}
+                          onClick={() => deleteExpense(ex.expenseId)}
+                        >
+                          {deletingExpenseId === ex.expenseId
+                            ? "Deleting..."
+                            : "Delete"}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </li>
@@ -562,6 +961,188 @@ export default function GroupPage() {
           </div>
         )}
       </div>
+
+      {editingExpenseId !== null && (
+        <div className={cardClassName}>
+          <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+            Update expense #{editingExpenseId}
+          </h2>
+
+          <div className="mt-3 grid grid-cols-1 gap-3">
+            <input
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none"
+              placeholder="Description"
+              value={editDesc}
+              onChange={(e) => setEditDesc(e.target.value)}
+            />
+
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <input
+                className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none"
+                placeholder="Amount (e.g., 42.50)"
+                value={editAmount}
+                onChange={(e) => setEditAmount(e.target.value)}
+                inputMode="decimal"
+              />
+
+              <select
+                className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2"
+                value={editPaidByUserId}
+                onChange={(e) =>
+                  setEditPaidByUserId(
+                    e.target.value ? Number(e.target.value) : "",
+                  )
+                }
+              >
+                <option value="">Paid by...</option>
+                {members.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {getMemberName(m)}
+                  </option>
+                ))}
+              </select>
+
+              <button
+                onClick={updateExpense}
+                disabled={
+                  updatingExpense ||
+                  !editDesc.trim() ||
+                  !editAmount ||
+                  editPaidByUserId === "" ||
+                  members.length === 0
+                }
+                className="rounded-xl border border-slate-300 bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {updatingExpense ? "Updating..." : "Save"}
+              </button>
+              <button
+                onClick={resetEditExpense}
+                disabled={updatingExpense}
+                className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <select
+                className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2"
+                value={editSplitMode}
+                onChange={(e) =>
+                  setEditSplitMode(
+                    e.target.value as
+                      | "equal"
+                      | "exact"
+                      | "percentage"
+                      | "shares",
+                  )
+                }
+              >
+                <option value="equal">Equal split</option>
+                <option value="exact">Exact amounts</option>
+                <option value="percentage">Percentages</option>
+                <option value="shares">Shares</option>
+              </select>
+            </div>
+
+            {editSplitMode === "exact" && (
+              <div className="rounded-xl border border-slate-200 bg-white p-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                  Exact amounts
+                </p>
+                <div className="mt-3 space-y-2">
+                  {members.map((member) => (
+                    <div
+                      key={member.id}
+                      className="flex flex-col gap-2 sm:flex-row sm:items-center"
+                    >
+                      <span className="text-sm font-medium text-slate-900 sm:w-48">
+                        {getMemberName(member)}
+                      </span>
+                      <input
+                        className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                        placeholder="0.00"
+                        inputMode="decimal"
+                        value={editExactAmounts[member.id] ?? ""}
+                        onChange={(e) =>
+                          setEditExactAmounts((prev) => ({
+                            ...prev,
+                            [member.id]: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {editSplitMode === "percentage" && (
+              <div className="rounded-xl border border-slate-200 bg-white p-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                  Percentages
+                </p>
+                <div className="mt-3 space-y-2">
+                  {members.map((member) => (
+                    <div
+                      key={member.id}
+                      className="flex flex-col gap-2 sm:flex-row sm:items-center"
+                    >
+                      <span className="text-sm font-medium text-slate-900 sm:w-48">
+                        {getMemberName(member)}
+                      </span>
+                      <input
+                        className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                        placeholder="0"
+                        inputMode="decimal"
+                        value={editPercentages[member.id] ?? ""}
+                        onChange={(e) =>
+                          setEditPercentages((prev) => ({
+                            ...prev,
+                            [member.id]: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {editSplitMode === "shares" && (
+              <div className="rounded-xl border border-slate-200 bg-white p-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                  Shares
+                </p>
+                <div className="mt-3 space-y-2">
+                  {members.map((member) => (
+                    <div
+                      key={member.id}
+                      className="flex flex-col gap-2 sm:flex-row sm:items-center"
+                    >
+                      <span className="text-sm font-medium text-slate-900 sm:w-48">
+                        {getMemberName(member)}
+                      </span>
+                      <input
+                        className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                        placeholder="1"
+                        inputMode="numeric"
+                        value={editShares[member.id] ?? ""}
+                        onChange={(e) =>
+                          setEditShares((prev) => ({
+                            ...prev,
+                            [member.id]: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className={cardClassName}>
         <div className="flex items-center justify-between">
@@ -580,6 +1161,18 @@ export default function GroupPage() {
           >
             {loadingSettlements ? "Refreshing..." : "Refresh"}
           </button>
+        </div>
+
+        <div className="mt-3">
+          <input
+            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+            placeholder="Confirmation ID (optional)"
+            value={confirmationId}
+            onChange={(e) => setConfirmationId(e.target.value)}
+          />
+          <p className="mt-1 text-xs text-slate-500">
+            Use a confirmation ID to make transfer confirmations idempotent.
+          </p>
         </div>
 
         {loadingSettlements ? (
@@ -683,6 +1276,234 @@ export default function GroupPage() {
           </div>
             );
           })()
+        )}
+      </div>
+
+      <div className={cardClassName}>
+        <div className="flex items-center justify-between">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+            Ledger
+          </h2>
+          <button
+            className="text-xs font-medium text-slate-600 underline"
+            onClick={() => Number.isFinite(groupId) && loadLedger(groupId)}
+            disabled={loadingLedger}
+          >
+            {loadingLedger ? "Refreshing..." : "Refresh"}
+          </button>
+        </div>
+
+        {loadingLedger ? (
+          <p className="mt-3 text-sm text-slate-500">Loading...</p>
+        ) : ledgerEntries.length === 0 ? (
+          <p className="mt-3 text-sm text-slate-500">
+            No ledger entries yet.
+          </p>
+        ) : (
+          <div className="mt-4 space-y-2">
+            {ledgerEntries.map((entry) => {
+              const member = members.find((m) => m.id === entry.userId);
+              const label = member
+                ? getMemberName(member)
+                : `User #${entry.userId}`;
+              return (
+                <div
+                  key={entry.userId}
+                  className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                >
+                  <span className="font-medium text-slate-900">{label}</span>
+                  <span
+                    className={
+                      entry.netBalance >= 0
+                        ? "text-emerald-700"
+                        : "text-rose-700"
+                    }
+                  >
+                    {entry.netBalance >= 0 ? "+" : "-"}$
+                    {Math.abs(entry.netBalance).toFixed(2)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <div className={cardClassName}>
+        <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+          Owes lookup
+        </h2>
+        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <select
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+            value={owesFromUserId}
+            onChange={(e) =>
+              setOwesFromUserId(
+                e.target.value ? Number(e.target.value) : "",
+              )
+            }
+          >
+            <option value="">From user...</option>
+            {members.map((m) => (
+              <option key={m.id} value={m.id}>
+                {getMemberName(m)}
+              </option>
+            ))}
+          </select>
+          <select
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+            value={owesToUserId}
+            onChange={(e) =>
+              setOwesToUserId(e.target.value ? Number(e.target.value) : "")
+            }
+          >
+            <option value="">To user...</option>
+            {members.map((m) => (
+              <option key={m.id} value={m.id}>
+                {getMemberName(m)}
+              </option>
+            ))}
+          </select>
+          <div className="flex gap-2">
+            <button
+              className="flex-1 rounded-xl border border-slate-300 bg-slate-900 px-3 py-2 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={
+                loadingOwes || owesFromUserId === "" || owesToUserId === ""
+              }
+              onClick={() => Number.isFinite(groupId) && loadOwes(groupId)}
+            >
+              Current
+            </button>
+            <button
+              className="flex-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={
+                loadingOwes || owesFromUserId === "" || owesToUserId === ""
+              }
+              onClick={() =>
+                Number.isFinite(groupId) && loadOwesHistorical(groupId)
+              }
+            >
+              Historical
+            </button>
+          </div>
+        </div>
+        <div className="mt-3 text-sm text-slate-600">
+          {loadingOwes && "Loading..."}
+          {!loadingOwes && owesAmount !== null && (
+            <div>Current owes: ${owesAmount.toFixed(2)}</div>
+          )}
+          {!loadingOwes && owesHistoricalAmount !== null && (
+            <div>Historical owes: ${owesHistoricalAmount.toFixed(2)}</div>
+          )}
+        </div>
+      </div>
+
+      <div className={cardClassName}>
+        <div className="flex items-center justify-between">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+            Confirmed transfers
+          </h2>
+          <button
+            className="text-xs font-medium text-slate-600 underline"
+            onClick={() =>
+              Number.isFinite(groupId) && loadConfirmedTransfers(groupId)
+            }
+            disabled={loadingConfirmedTransfers}
+          >
+            {loadingConfirmedTransfers ? "Refreshing..." : "Refresh"}
+          </button>
+        </div>
+
+        <input
+          className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+          placeholder="Filter by confirmation ID (optional)"
+          value={confirmedFilter}
+          onChange={(e) => setConfirmedFilter(e.target.value)}
+        />
+
+        {loadingConfirmedTransfers ? (
+          <p className="mt-3 text-sm text-slate-500">Loading...</p>
+        ) : confirmedTransfers.length === 0 ? (
+          <p className="mt-3 text-sm text-slate-500">
+            No confirmed transfers yet.
+          </p>
+        ) : (
+          <div className="mt-4 space-y-2">
+            {confirmedTransfers.map((transfer) => {
+              const fromMember = members.find(
+                (m) => m.id === transfer.fromUserId,
+              );
+              const toMember = members.find(
+                (m) => m.id === transfer.toUserId,
+              );
+              const fromLabel = fromMember
+                ? getMemberName(fromMember)
+                : `User #${transfer.fromUserId}`;
+              const toLabel = toMember
+                ? getMemberName(toMember)
+                : `User #${transfer.toUserId}`;
+              return (
+                <div
+                  key={transfer.id}
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600"
+                >
+                  <div className="text-sm font-medium text-slate-900">
+                    {fromLabel} → {toLabel}: $
+                    {Number(transfer.amount).toFixed(2)}
+                  </div>
+                  <div className="mt-1">
+                    Confirmation: {transfer.confirmationId ?? "—"} ·{" "}
+                    {new Date(transfer.createdAt).toLocaleString()}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <div className={cardClassName}>
+        <div className="flex items-center justify-between">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+            Expense events
+          </h2>
+          <button
+            className="text-xs font-medium text-slate-600 underline"
+            onClick={() => Number.isFinite(groupId) && loadEvents(groupId)}
+            disabled={loadingEvents}
+          >
+            {loadingEvents ? "Refreshing..." : "Refresh"}
+          </button>
+        </div>
+
+        {loadingEvents ? (
+          <p className="mt-3 text-sm text-slate-500">Loading...</p>
+        ) : events.length === 0 ? (
+          <p className="mt-3 text-sm text-slate-500">
+            No events yet.
+          </p>
+        ) : (
+          <div className="mt-4 max-h-64 overflow-y-auto pr-1">
+            <ul className="space-y-2">
+              {events.map((event) => (
+                <li
+                  key={event.eventId}
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600"
+                >
+                  <div className="text-sm font-medium text-slate-900">
+                    {event.eventType}
+                  </div>
+                  <div className="mt-1">
+                    Expense #{event.expenseId ?? "—"} ·{" "}
+                    {new Date(event.createdAt).toLocaleString()}
+                  </div>
+                  <div className="mt-2 whitespace-pre-wrap break-words text-[11px] text-slate-500">
+                    {event.payload}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </div>
       </div>
