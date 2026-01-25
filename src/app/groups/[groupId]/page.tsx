@@ -152,6 +152,24 @@ export default function GroupPage() {
     return `${transfer.fromUserId}-${transfer.toUserId}-${transfer.amount.toFixed(2)}`;
   }
 
+  function generateUuid() {
+    if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+      return crypto.randomUUID();
+    }
+    const bytes = Array.from({ length: 16 }, () =>
+      Math.floor(Math.random() * 256),
+    );
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    return bytes
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("")
+      .replace(
+        /^(.{8})(.{4})(.{4})(.{4})(.{12})$/,
+        "$1-$2-$3-$4-$5",
+      );
+  }
+
   function buildMemberValueMap(
     membersList: Member[],
     seed: Record<number, string> = {},
@@ -170,10 +188,14 @@ export default function GroupPage() {
 
     setConfirmingTransfers((prev) => new Set(prev).add(key));
     try {
+      const confirmationHeader = confirmationId.trim();
       await api<void>(`/groups/${groupId}/settlements/confirm`, {
         method: "POST",
+        headers: confirmationHeader
+          ? { "Confirmation-Id": confirmationHeader }
+          : undefined,
         body: JSON.stringify({
-          confirmationId: confirmationId.trim() || undefined,
+          confirmationId: confirmationHeader || undefined,
           transfers: [
             {
               fromUserId: transfer.fromUserId,
@@ -195,6 +217,21 @@ export default function GroupPage() {
         next.delete(key);
         return next;
       });
+    }
+  }
+
+  async function generateConfirmationIdFromApi() {
+    if (!Number.isFinite(groupId)) return;
+    try {
+      const res = await api<Record<string, string>>(
+        `/groups/${groupId}/confirmation-id`,
+      );
+      const value = Object.values(res ?? {}).find((val) => val?.trim());
+      setConfirmationId(value ?? "");
+    } catch (e: unknown) {
+      setError(
+        e instanceof Error ? e.message : "Failed to generate confirmation ID",
+      );
     }
   }
 
@@ -1164,12 +1201,21 @@ export default function GroupPage() {
         </div>
 
         <div className="mt-3">
-          <input
-            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
-            placeholder="Confirmation ID (optional)"
-            value={confirmationId}
-            onChange={(e) => setConfirmationId(e.target.value)}
-          />
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <input
+              className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+              placeholder="Confirmation ID (optional)"
+              value={confirmationId}
+              onChange={(e) => setConfirmationId(e.target.value)}
+            />
+            <button
+              type="button"
+              className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700"
+              onClick={generateConfirmationIdFromApi}
+            >
+              Generate ID
+            </button>
+          </div>
           <p className="mt-1 text-xs text-slate-500">
             Use a confirmation ID to make transfer confirmations idempotent.
           </p>
