@@ -76,6 +76,7 @@ The frontend expects the following backend endpoints (base URL from `NEXT_PUBLIC
 
 - `GET /groups/{groupId}/settlements` -> `{ transfers: [{ fromUserId, toUserId, amount }] }`
 - `POST /groups/{groupId}/settlements/confirm` -> 204
+  - Optional header: `Confirmation-Id: <uuid>` (overrides body `confirmationId` if body omits it)
   ```json
   {
     "confirmationId": "string",
@@ -85,6 +86,7 @@ The frontend expects the following backend endpoints (base URL from `NEXT_PUBLIC
   }
   ```
   Notes: `confirmationId` is optional and can be used for idempotency.
+- `GET /groups/{groupId}/confirmation-id` -> `{ "<key>": "<uuid>" }` (generate a confirmation id)
 
 ### Ledger and analytics
 
