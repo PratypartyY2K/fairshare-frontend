@@ -17,9 +17,10 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
 
 ## Getting started
 
-Install and run the dev server:
+Install dependencies and run the dev server:
 
 ```bash
+npm install
 npm run dev
 ```
 
@@ -45,27 +46,31 @@ The frontend expects the following backend endpoints (base URL from `NEXT_PUBLIC
 - `GET /groups` -> `[{ id, name? }]`
 - `POST /groups` -> `{ id, name? }`
 - `GET /groups/{groupId}` -> `{ id, name?, members: [{ id, name?, userName? }] }`
-- `PATCH /groups/{groupId}` -> 204
+- `PATCH /groups/{groupId}` -> `{ id, name?, members: [...] }`
 
 ### Members
 
-- `POST /groups/{groupId}/members` -> `{ userId, name }`
+- `POST /groups/{groupId}/members` expects `{ userName }` -> `{ userId, name }`
 
 ### Expenses
 
-- `GET /groups/{groupId}/expenses` -> `[{ id, description, amount, payerUserId, createdAt? }]`
+- `GET /groups/{groupId}/expenses` -> `[{ expenseId, groupId, description, amount, payerUserId, createdAt, splits: [{ userId, shareAmount }] }]`
 - `POST /groups/{groupId}/expenses` expects:
   ```json
   {
     "description": "string",
     "amount": 0,
     "payerUserId": 0,
+    "paidByUserId": 0,
     "participantUserIds": [0],
     "shares": [1],
     "exactAmounts": [0],
     "percentages": [0]
   }
   ```
+  Notes: send only one split mode (exactAmounts, percentages, or shares). If none is provided, the backend uses equal split. The backend accepts either `payerUserId` or `paidByUserId`.
+- `PATCH /groups/{groupId}/expenses/{expenseId}` -> updated expense response
+- `DELETE /groups/{groupId}/expenses/{expenseId}` -> 204
 
 ### Settlements
 
@@ -73,11 +78,21 @@ The frontend expects the following backend endpoints (base URL from `NEXT_PUBLIC
 - `POST /groups/{groupId}/settlements/confirm` -> 204
   ```json
   {
+    "confirmationId": "string",
     "transfers": [
       { "fromUserId": 0, "toUserId": 0, "amount": 0 }
     ]
   }
   ```
+  Notes: `confirmationId` is optional and can be used for idempotency.
+
+### Ledger and analytics
+
+- `GET /groups/{groupId}/ledger` -> `{ entries: [{ userId, netBalance }] }`
+- `GET /groups/{groupId}/events` -> `[{ eventId, groupId, expenseId, eventType, payload, createdAt }]`
+- `GET /groups/{groupId}/confirmed-transfers?confirmationId=...` -> `[{ id, groupId, fromUserId, toUserId, amount, confirmationId, createdAt }]`
+- `GET /groups/{groupId}/owes?fromUserId=...&toUserId=...` -> `{ amount }`
+- `GET /groups/{groupId}/owes/historical?fromUserId=...&toUserId=...` -> `{ amount }`
 
 ## Project structure
 
