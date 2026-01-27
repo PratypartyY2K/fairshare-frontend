@@ -218,9 +218,7 @@ export default function GroupPage() {
       const confirmationHeader = confirmationId.trim();
       await api<void>(`/groups/${groupId}/settlements/confirm`, {
         method: "POST",
-        headers: confirmationHeader
-          ? { "Confirmation-Id": confirmationHeader }
-          : undefined,
+        confirmationId: confirmationHeader || undefined,
         body: JSON.stringify({
           confirmationId: confirmationHeader || undefined,
           transfers: [
@@ -520,9 +518,7 @@ export default function GroupPage() {
 
       await api<void>(`/groups/${groupId}/expenses`, {
         method: "POST",
-        headers: idempotencyKey.trim()
-          ? { "Idempotency-Key": idempotencyKey.trim() }
-          : undefined,
+        idempotencyKey: idempotencyKey.trim() || undefined,
         body: JSON.stringify(payload),
       });
 
