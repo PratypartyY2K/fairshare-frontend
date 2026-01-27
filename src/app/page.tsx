@@ -21,6 +21,45 @@ type PaginatedResponse<T> = {
   pageSize: number;
 };
 
+type BannerVariant = "loading" | "empty" | "error" | "info";
+
+function StatusBanner({
+  variant,
+  message,
+  onRetry,
+}: {
+  variant: BannerVariant;
+  message: string;
+  onRetry?: () => void;
+}) {
+  const styles = {
+    loading: "border-slate-200 bg-slate-50 text-slate-700",
+    empty: "border-amber-200 bg-amber-50 text-amber-800",
+    error: "border-rose-200 bg-rose-50 text-rose-700",
+    info: "border-sky-200 bg-sky-50 text-sky-700",
+  }[variant];
+  const icon = {
+    loading: "⏳",
+    empty: "🗂️",
+    error: "⚠️",
+    info: "ℹ️",
+  }[variant];
+
+  return (
+    <div className={`mt-3 flex items-start justify-between gap-3 rounded-xl border px-3 py-2 text-sm ${styles}`}>
+      <div className="flex items-start gap-2">
+        <span aria-hidden="true">{icon}</span>
+        <span>{message}</span>
+      </div>
+      {onRetry && (
+        <button onClick={onRetry} className="text-xs underline">
+          Retry
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function HomePage() {
   const [groupName, setGroupName] = useState("");
   const [createdGroupId, setCreatedGroupId] = useState<number | null>(null);
@@ -30,23 +69,22 @@ export default function HomePage() {
   const [editingGroupId, setEditingGroupId] = useState<number | null>(null);
   const [editingGroupName, setEditingGroupName] = useState("");
   const [savingGroupId, setSavingGroupId] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [createGroupError, setCreateGroupError] = useState<string | null>(null);
+  const [groupsError, setGroupsError] = useState<string | null>(null);
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
   const [rootStatus, setRootStatus] = useState<string | null>(null);
   const [healthStatus, setHealthStatus] = useState<string | null>(null);
   const [loadingStatus, setLoadingStatus] = useState(true);
 
   async function loadGroups() {
-    setError(null);
+    setGroupsError(null);
     setLoadingGroups(true);
     try {
       const res = await api<PaginatedResponse<Group>>("/groups");
       setGroups(res.items ?? []);
     } catch (e: unknown) {
-      if (e instanceof Error) {
-        setError(e.message);
-      } else {
-        setError("Failed to load groups");
-      }
+      setGroupsError(e instanceof Error ? e.message : "Failed to load groups");
     } finally {
       setLoadingGroups(false);
     }
@@ -59,6 +97,7 @@ export default function HomePage() {
 
   async function loadStatus() {
     setLoadingStatus(true);
+    setStatusError(null);
     try {
       const [rootRes, healthRes] = await Promise.all([
         api<Record<string, string>>("/"),
@@ -70,13 +109,14 @@ export default function HomePage() {
       const message = e instanceof Error ? e.message : "Status unavailable";
       setRootStatus(message);
       setHealthStatus(message);
+      setStatusError(message);
     } finally {
       setLoadingStatus(false);
     }
   }
 
   async function onCreateGroup() {
-    setError(null);
+    setCreateGroupError(null);
     setLoading(true);
     try {
       const res = await api<CreateGroupResponse>("/groups", {
@@ -87,13 +127,9 @@ export default function HomePage() {
       setGroupName("");
       await loadGroups();
     } catch (e: unknown) {
-      if (e instanceof Error) {
-        setError(e.message);
-      } else if (typeof e === "string") {
-        setError(e);
-      } else {
-        setError("Failed to create group");
-      }
+      if (e instanceof Error) setCreateGroupError(e.message);
+      else if (typeof e === "string") setCreateGroupError(e);
+      else setCreateGroupError("Failed to create group");
     } finally {
       setLoading(false);
     }
@@ -107,11 +143,11 @@ export default function HomePage() {
   async function saveGroupName(groupId: number) {
     const trimmedName = editingGroupName.trim();
     if (!trimmedName) {
-      setError("Group name cannot be empty");
+      setRenameError("Group name cannot be empty");
       return;
     }
 
-    setError(null);
+    setRenameError(null);
     setSavingGroupId(groupId);
     try {
       await api<void>(`/groups/${groupId}`, {
@@ -122,11 +158,7 @@ export default function HomePage() {
       setEditingGroupName("");
       await loadGroups();
     } catch (e: unknown) {
-      if (e instanceof Error) {
-        setError(e.message);
-      } else {
-        setError("Failed to update group");
-      }
+      setRenameError(e instanceof Error ? e.message : "Failed to update group");
     } finally {
       setSavingGroupId(null);
     }
@@ -158,7 +190,16 @@ export default function HomePage() {
           </button>
         </div>
 
-        {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+        {loading && (
+          <StatusBanner variant="loading" message="Creating group..." />
+        )}
+        {createGroupError && (
+          <StatusBanner
+            variant="error"
+            message={createGroupError}
+            onRetry={onCreateGroup}
+          />
+        )}
 
         {createdGroupId !== null && (
           <div className="mt-4 text-sm">
@@ -185,16 +226,32 @@ export default function HomePage() {
           <div>Root (/): {loadingStatus ? "Loading..." : rootStatus}</div>
           <div>Health (/health): {loadingStatus ? "Loading..." : healthStatus}</div>
         </div>
+        {statusError && (
+          <StatusBanner
+            variant="error"
+            message={statusError}
+            onRetry={loadStatus}
+          />
+        )}
       </div>
 
       <div className="mt-6 rounded-2xl border p-4">
         <h2 className="font-medium">Existing groups</h2>
 
-        {loadingGroups ? (
-          <p className="mt-3 text-sm text-gray-500">Loading...</p>
-        ) : groups.length === 0 ? (
-          <p className="mt-3 text-sm text-gray-500">No groups yet.</p>
-        ) : (
+        {loadingGroups && (
+          <StatusBanner variant="loading" message="Loading groups..." />
+        )}
+        {groupsError && (
+          <StatusBanner
+            variant="error"
+            message={groupsError}
+            onRetry={loadGroups}
+          />
+        )}
+        {!loadingGroups && !groupsError && groups.length === 0 && (
+          <StatusBanner variant="empty" message="No groups yet." />
+        )}
+        {!loadingGroups && !groupsError && groups.length > 0 && (
           <ul className="mt-3 space-y-2">
             {groups.map((group) => (
               <li key={group.id} className="rounded-xl border px-3 py-2">
@@ -243,6 +300,13 @@ export default function HomePage() {
                       Rename
                     </button>
                   </div>
+                )}
+                {editingGroupId === group.id && renameError && (
+                  <StatusBanner
+                    variant="error"
+                    message={renameError}
+                    onRetry={() => saveGroupName(group.id)}
+                  />
                 )}
               </li>
             ))}

@@ -69,6 +69,45 @@ type PaginatedResponse<T> = {
   pageSize: number;
 };
 
+type BannerVariant = "loading" | "empty" | "error" | "info";
+
+function StatusBanner({
+  variant,
+  message,
+  onRetry,
+}: {
+  variant: BannerVariant;
+  message: string;
+  onRetry?: () => void;
+}) {
+  const styles = {
+    loading: "border-slate-200 bg-slate-50 text-slate-700",
+    empty: "border-amber-200 bg-amber-50 text-amber-800",
+    error: "border-rose-200 bg-rose-50 text-rose-700",
+    info: "border-sky-200 bg-sky-50 text-sky-700",
+  }[variant];
+  const icon = {
+    loading: "⏳",
+    empty: "🗂️",
+    error: "⚠️",
+    info: "ℹ️",
+  }[variant];
+
+  return (
+    <div className={`mt-3 flex items-start justify-between gap-3 rounded-xl border px-3 py-2 text-sm ${styles}`}>
+      <div className="flex items-start gap-2">
+        <span aria-hidden="true">{icon}</span>
+        <span>{message}</span>
+      </div>
+      {onRetry && (
+        <button onClick={onRetry} className="text-xs underline">
+          Retry
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function GroupPage() {
   const pathname = usePathname();
   const groupId = useMemo(() => {
@@ -79,12 +118,15 @@ export default function GroupPage() {
 
   const [members, setMembers] = useState<Member[]>([]);
   const [userName, setUserName] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [addingMember, setAddingMember] = useState(false);
   const [loadingMembers, setLoadingMembers] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [groupError, setGroupError] = useState<string | null>(null);
+  const [membersError, setMembersError] = useState<string | null>(null);
+  const [addMemberError, setAddMemberError] = useState<string | null>(null);
   const [groupName, setGroupName] = useState<string | null>(null);
   const [editingGroupName, setEditingGroupName] = useState("");
   const [savingGroupName, setSavingGroupName] = useState(false);
+  const [renameGroupError, setRenameGroupError] = useState<string | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [desc, setDesc] = useState("");
   const [amount, setAmount] = useState<string>("");
@@ -98,15 +140,23 @@ export default function GroupPage() {
   const [idempotencyKey, setIdempotencyKey] = useState("");
 
   const [settlements, setSettlements] = useState<SettlementTransfer[]>([]);
+  const [addingExpense, setAddingExpense] = useState(false);
   const [loadingExpenses, setLoadingExpenses] = useState(false);
   const [loadingSettlements, setLoadingSettlements] = useState(false);
+  const [expensesError, setExpensesError] = useState<string | null>(null);
+  const [settlementsError, setSettlementsError] = useState<string | null>(null);
+  const [addExpenseError, setAddExpenseError] = useState<string | null>(null);
   const [confirmationId, setConfirmationId] = useState("");
+  const [confirmationIdError, setConfirmationIdError] =
+    useState<string | null>(null);
   const [paidTransfers, setPaidTransfers] = useState<Set<string>>(
     () => new Set(),
   );
   const [confirmingTransfers, setConfirmingTransfers] = useState<Set<string>>(
     () => new Set(),
   );
+  const [confirmTransferError, setConfirmTransferError] =
+    useState<string | null>(null);
 
   const [editingExpenseId, setEditingExpenseId] = useState<number | null>(null);
   const [editDesc, setEditDesc] = useState("");
@@ -123,21 +173,29 @@ export default function GroupPage() {
   >({});
   const [editShares, setEditShares] = useState<Record<number, string>>({});
   const [updatingExpense, setUpdatingExpense] = useState(false);
+  const [updateExpenseError, setUpdateExpenseError] =
+    useState<string | null>(null);
   const [deletingExpenseId, setDeletingExpenseId] = useState<number | null>(
     null,
   );
+  const [deleteExpenseError, setDeleteExpenseError] =
+    useState<string | null>(null);
 
   const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([]);
   const [loadingLedger, setLoadingLedger] = useState(false);
+  const [ledgerError, setLedgerError] = useState<string | null>(null);
 
   const [events, setEvents] = useState<EventResponse[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(false);
+  const [eventsError, setEventsError] = useState<string | null>(null);
 
   const [confirmedTransfers, setConfirmedTransfers] = useState<
     ConfirmedTransfer[]
   >([]);
   const [loadingConfirmedTransfers, setLoadingConfirmedTransfers] =
     useState(false);
+  const [confirmedTransfersError, setConfirmedTransfersError] =
+    useState<string | null>(null);
   const [confirmedFilter, setConfirmedFilter] = useState("");
 
   const [owesFromUserId, setOwesFromUserId] = useState<number | "">("");
@@ -147,6 +205,7 @@ export default function GroupPage() {
     number | null
   >(null);
   const [loadingOwes, setLoadingOwes] = useState(false);
+  const [owesError, setOwesError] = useState<string | null>(null);
 
   const cardClassName =
     "rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm backdrop-blur";
@@ -216,6 +275,7 @@ export default function GroupPage() {
     setConfirmingTransfers((prev) => new Set(prev).add(key));
     try {
       const confirmationHeader = confirmationId.trim();
+      setConfirmTransferError(null);
       await api<void>(`/groups/${groupId}/settlements/confirm`, {
         method: "POST",
         confirmationId: confirmationHeader || undefined,
@@ -235,7 +295,9 @@ export default function GroupPage() {
       }
       setPaidTransfers((prev) => new Set(prev).add(key));
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to confirm transfer");
+      setConfirmTransferError(
+        e instanceof Error ? e.message : "Failed to confirm transfer",
+      );
     } finally {
       setConfirmingTransfers((prev) => {
         const next = new Set(prev);
@@ -248,27 +310,31 @@ export default function GroupPage() {
   async function generateConfirmationIdFromApi() {
     if (!Number.isFinite(groupId)) return;
     try {
+      setConfirmationIdError(null);
       const res = await api<{ confirmationId: string }>(
         `/groups/${groupId}/api/confirmation-id`,
       );
       setConfirmationId(res?.confirmationId ?? "");
     } catch (e: unknown) {
-      setError(
+      setConfirmationIdError(
         e instanceof Error ? e.message : "Failed to generate confirmation ID",
       );
     }
   }
 
   async function loadGroup(gid: number) {
-    setError(null);
+    setGroupError(null);
+    setMembersError(null);
     setLoadingMembers(true);
     try {
       const group = await api<GroupResponse>(`/groups/${gid}`);
       setMembers(group.members ?? []);
       setGroupName(group.name ?? null);
     } catch (e: unknown) {
-      if (e instanceof Error) setError(e.message ?? "Failed to load group");
-      else setError(String(e) || "Failed to load group");
+      const message =
+        e instanceof Error ? e.message ?? "Failed to load group" : String(e);
+      setGroupError(message || "Failed to load group");
+      setMembersError(message || "Failed to load group");
     } finally {
       setLoadingMembers(false);
     }
@@ -293,8 +359,8 @@ export default function GroupPage() {
 
   async function addMember() {
     if (!Number.isFinite(groupId) || groupId <= 0) return;
-    setError(null);
-    setLoading(true);
+    setAddMemberError(null);
+    setAddingMember(true);
     try {
       await api<{ userId: number; name: string }>(
         `/groups/${groupId}/members`,
@@ -306,10 +372,13 @@ export default function GroupPage() {
       setUserName("");
       await loadGroup(groupId);
     } catch (e: unknown) {
-      if (e instanceof Error) setError(e.message ?? "Failed to add member");
-      else setError(String(e) || "Failed to add member");
+      if (e instanceof Error) {
+        setAddMemberError(e.message ?? "Failed to add member");
+      } else {
+        setAddMemberError(String(e) || "Failed to add member");
+      }
     } finally {
-      setLoading(false);
+      setAddingMember(false);
     }
   }
 
@@ -317,11 +386,11 @@ export default function GroupPage() {
     if (!Number.isFinite(groupId) || groupId <= 0) return;
     const trimmedName = editingGroupName.trim();
     if (!trimmedName) {
-      setError("Group name cannot be empty");
+      setRenameGroupError("Group name cannot be empty");
       return;
     }
 
-    setError(null);
+    setRenameGroupError(null);
     setSavingGroupName(true);
     try {
       const res = await api<GroupResponse>(`/groups/${groupId}`, {
@@ -332,8 +401,11 @@ export default function GroupPage() {
       setMembers(res.members ?? []);
       setEditingGroupName("");
     } catch (e: unknown) {
-      if (e instanceof Error) setError(e.message ?? "Failed to update group");
-      else setError(String(e) || "Failed to update group");
+      if (e instanceof Error) {
+        setRenameGroupError(e.message ?? "Failed to update group");
+      } else {
+        setRenameGroupError(String(e) || "Failed to update group");
+      }
     } finally {
       setSavingGroupName(false);
     }
@@ -341,11 +413,16 @@ export default function GroupPage() {
 
   async function loadExpenses(gid: number) {
     setLoadingExpenses(true);
+    setExpensesError(null);
     try {
       const res = await api<PaginatedResponse<Expense>>(
         `/groups/${gid}/expenses`,
       );
       setExpenses(res.items ?? []);
+    } catch (e: unknown) {
+      setExpensesError(
+        e instanceof Error ? e.message : "Failed to load expenses",
+      );
     } finally {
       setLoadingExpenses(false);
     }
@@ -353,11 +430,16 @@ export default function GroupPage() {
 
   async function loadSettlements(gid: number) {
     setLoadingSettlements(true);
+    setSettlementsError(null);
     try {
       const res = await api<{ transfers: SettlementTransfer[] }>(
         `/groups/${gid}/settlements`,
       );
       setSettlements(res.transfers ?? []);
+    } catch (e: unknown) {
+      setSettlementsError(
+        e instanceof Error ? e.message : "Failed to load settlements",
+      );
     } finally {
       setLoadingSettlements(false);
     }
@@ -365,11 +447,16 @@ export default function GroupPage() {
 
   async function loadLedger(gid: number) {
     setLoadingLedger(true);
+    setLedgerError(null);
     try {
       const res = await api<{ entries: LedgerEntry[] }>(
         `/groups/${gid}/ledger`,
       );
       setLedgerEntries(res.entries ?? []);
+    } catch (e: unknown) {
+      setLedgerError(
+        e instanceof Error ? e.message : "Failed to load ledger",
+      );
     } finally {
       setLoadingLedger(false);
     }
@@ -377,11 +464,16 @@ export default function GroupPage() {
 
   async function loadEvents(gid: number) {
     setLoadingEvents(true);
+    setEventsError(null);
     try {
       const res = await api<PaginatedResponse<EventResponse>>(
         `/groups/${gid}/events`,
       );
       setEvents(res.items ?? []);
+    } catch (e: unknown) {
+      setEventsError(
+        e instanceof Error ? e.message : "Failed to load events",
+      );
     } finally {
       setLoadingEvents(false);
     }
@@ -389,6 +481,7 @@ export default function GroupPage() {
 
   async function loadConfirmedTransfers(gid: number) {
     setLoadingConfirmedTransfers(true);
+    setConfirmedTransfersError(null);
     try {
       const query = confirmedFilter.trim()
         ? `?confirmationId=${encodeURIComponent(confirmedFilter.trim())}`
@@ -397,6 +490,10 @@ export default function GroupPage() {
         `/groups/${gid}/confirmed-transfers${query}`,
       );
       setConfirmedTransfers(res.items ?? []);
+    } catch (e: unknown) {
+      setConfirmedTransfersError(
+        e instanceof Error ? e.message : "Failed to load confirmed transfers",
+      );
     } finally {
       setLoadingConfirmedTransfers(false);
     }
@@ -405,12 +502,15 @@ export default function GroupPage() {
   async function loadOwes(gid: number) {
     if (owesFromUserId === "" || owesToUserId === "") return;
     setLoadingOwes(true);
+    setOwesError(null);
     try {
       const res = await api<{ amount: string }>(
         `/groups/${gid}/owes?fromUserId=${owesFromUserId}&toUserId=${owesToUserId}`,
       );
       const value = Number(res.amount);
       setOwesAmount(Number.isFinite(value) ? value : 0);
+    } catch (e: unknown) {
+      setOwesError(e instanceof Error ? e.message : "Failed to load owes");
     } finally {
       setLoadingOwes(false);
     }
@@ -419,12 +519,17 @@ export default function GroupPage() {
   async function loadOwesHistorical(gid: number) {
     if (owesFromUserId === "" || owesToUserId === "") return;
     setLoadingOwes(true);
+    setOwesError(null);
     try {
       const res = await api<{ amount: string }>(
         `/groups/${gid}/owes/historical?fromUserId=${owesFromUserId}&toUserId=${owesToUserId}`,
       );
       const value = Number(res.amount);
       setOwesHistoricalAmount(Number.isFinite(value) ? value : 0);
+    } catch (e: unknown) {
+      setOwesError(
+        e instanceof Error ? e.message : "Failed to load historical owes",
+      );
     } finally {
       setLoadingOwes(false);
     }
@@ -437,11 +542,11 @@ export default function GroupPage() {
     if (!Number.isFinite(amt) || amt <= 0) return;
     if (paidByUserId === "") return;
 
-    setError(null);
-    setLoading(true);
+    setAddExpenseError(null);
+    setAddingExpense(true);
     const participantUserIds = members.map((m) => m.id);
     if (participantUserIds.length === 0) {
-      setLoading(false);
+      setAddingExpense(false);
       return;
     }
     const sharesList =
@@ -461,31 +566,31 @@ export default function GroupPage() {
       splitMode === "exact" &&
       exactAmountNumbers.some((val) => !Number.isFinite(val))
     ) {
-      setError("Enter an exact amount for each member.");
-      setLoading(false);
+      setAddExpenseError("Enter an exact amount for each member.");
+      setAddingExpense(false);
       return;
     }
     if (
       splitMode === "percentage" &&
       percentageNumbers.some((val) => !Number.isFinite(val))
     ) {
-      setError("Enter a percentage for each member.");
-      setLoading(false);
+      setAddExpenseError("Enter a percentage for each member.");
+      setAddingExpense(false);
       return;
     }
     if (
       splitMode === "shares" &&
       sharesList.some((val) => !Number.isFinite(val) || val < 1)
     ) {
-      setError("Enter a share count (>= 1) for each member.");
-      setLoading(false);
+      setAddExpenseError("Enter a share count (>= 1) for each member.");
+      setAddingExpense(false);
       return;
     }
     if (splitMode === "exact") {
       const exactSum = exactAmountNumbers.reduce((sum, val) => sum + val, 0);
       if (Math.abs(exactSum - amt) > 0.01) {
-        setError("Exact amounts must add up to the total.");
-        setLoading(false);
+        setAddExpenseError("Exact amounts must add up to the total.");
+        setAddingExpense(false);
         return;
       }
     }
@@ -495,8 +600,8 @@ export default function GroupPage() {
         0,
       );
       if (Math.abs(percentageSum - 100) > 0.01) {
-        setError("Percentages must add up to 100%.");
-        setLoading(false);
+        setAddExpenseError("Percentages must add up to 100%.");
+        setAddingExpense(false);
         return;
       }
     }
@@ -537,10 +642,13 @@ export default function GroupPage() {
         loadEvents(groupId),
       ]);
     } catch (e: unknown) {
-      if (e instanceof Error) setError(e.message ?? "Failed to add expense");
-      else setError(String(e) || "Failed to add expense");
+      if (e instanceof Error) {
+        setAddExpenseError(e.message ?? "Failed to add expense");
+      } else {
+        setAddExpenseError(String(e) || "Failed to add expense");
+      }
     } finally {
-      setLoading(false);
+      setAddingExpense(false);
     }
   }
 
@@ -580,7 +688,7 @@ export default function GroupPage() {
     if (!Number.isFinite(amt) || amt <= 0) return;
     if (editPaidByUserId === "") return;
 
-    setError(null);
+    setUpdateExpenseError(null);
     setUpdatingExpense(true);
     const participantUserIds = members.map((m) => m.id);
     if (participantUserIds.length === 0) {
@@ -604,7 +712,7 @@ export default function GroupPage() {
       editSplitMode === "exact" &&
       exactAmountNumbers.some((val) => !Number.isFinite(val))
     ) {
-      setError("Enter an exact amount for each member.");
+      setUpdateExpenseError("Enter an exact amount for each member.");
       setUpdatingExpense(false);
       return;
     }
@@ -612,7 +720,7 @@ export default function GroupPage() {
       editSplitMode === "percentage" &&
       percentageNumbers.some((val) => !Number.isFinite(val))
     ) {
-      setError("Enter a percentage for each member.");
+      setUpdateExpenseError("Enter a percentage for each member.");
       setUpdatingExpense(false);
       return;
     }
@@ -620,14 +728,14 @@ export default function GroupPage() {
       editSplitMode === "shares" &&
       sharesList.some((val) => !Number.isFinite(val) || val < 1)
     ) {
-      setError("Enter a share count (>= 1) for each member.");
+      setUpdateExpenseError("Enter a share count (>= 1) for each member.");
       setUpdatingExpense(false);
       return;
     }
     if (editSplitMode === "exact") {
       const exactSum = exactAmountNumbers.reduce((sum, val) => sum + val, 0);
       if (Math.abs(exactSum - amt) > 0.01) {
-        setError("Exact amounts must add up to the total.");
+        setUpdateExpenseError("Exact amounts must add up to the total.");
         setUpdatingExpense(false);
         return;
       }
@@ -638,7 +746,7 @@ export default function GroupPage() {
         0,
       );
       if (Math.abs(percentageSum - 100) > 0.01) {
-        setError("Percentages must add up to 100%.");
+        setUpdateExpenseError("Percentages must add up to 100%.");
         setUpdatingExpense(false);
         return;
       }
@@ -673,8 +781,11 @@ export default function GroupPage() {
       ]);
       resetEditExpense();
     } catch (e: unknown) {
-      if (e instanceof Error) setError(e.message ?? "Failed to update expense");
-      else setError(String(e) || "Failed to update expense");
+      if (e instanceof Error) {
+        setUpdateExpenseError(e.message ?? "Failed to update expense");
+      } else {
+        setUpdateExpenseError(String(e) || "Failed to update expense");
+      }
     } finally {
       setUpdatingExpense(false);
     }
@@ -683,6 +794,7 @@ export default function GroupPage() {
   async function deleteExpense(expenseId: number) {
     if (!Number.isFinite(groupId)) return;
     setDeletingExpenseId(expenseId);
+    setDeleteExpenseError(null);
     try {
       await api<void>(`/groups/${groupId}/expenses/${expenseId}`, {
         method: "DELETE",
@@ -693,8 +805,11 @@ export default function GroupPage() {
         loadEvents(groupId),
       ]);
     } catch (e: unknown) {
-      if (e instanceof Error) setError(e.message ?? "Failed to delete expense");
-      else setError(String(e) || "Failed to delete expense");
+      if (e instanceof Error) {
+        setDeleteExpenseError(e.message ?? "Failed to delete expense");
+      } else {
+        setDeleteExpenseError(String(e) || "Failed to delete expense");
+      }
     } finally {
       setDeletingExpenseId(null);
     }
@@ -727,10 +842,12 @@ export default function GroupPage() {
         </p>
       </div>
 
-      {error && (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-          {error}
-        </div>
+      {groupError && (
+        <StatusBanner
+          variant="error"
+          message={groupError}
+          onRetry={() => Number.isFinite(groupId) && loadGroup(groupId)}
+        />
       )}
 
       <div className={cardClassName}>
@@ -752,6 +869,16 @@ export default function GroupPage() {
             {savingGroupName ? "Saving..." : "Save"}
           </button>
         </div>
+        {savingGroupName && (
+          <StatusBanner variant="loading" message="Saving group name..." />
+        )}
+        {renameGroupError && (
+          <StatusBanner
+            variant="error"
+            message={renameGroupError}
+            onRetry={saveGroupName}
+          />
+        )}
       </div>
 
       <div className={cardClassName}>
@@ -768,12 +895,24 @@ export default function GroupPage() {
           />
           <button
             onClick={addMember}
-            disabled={!userName.trim() || loading || !Number.isFinite(groupId)}
+            disabled={
+              !userName.trim() || addingMember || !Number.isFinite(groupId)
+            }
             className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {loading ? "Adding..." : "Add"}
+            {addingMember ? "Adding..." : "Add"}
           </button>
         </div>
+        {addingMember && (
+          <StatusBanner variant="loading" message="Adding member..." />
+        )}
+        {addMemberError && (
+          <StatusBanner
+            variant="error"
+            message={addMemberError}
+            onRetry={addMember}
+          />
+        )}
       </div>
 
       <div className={cardClassName}>
@@ -781,13 +920,23 @@ export default function GroupPage() {
           Members
         </h2>
 
-        {loadingMembers ? (
-          <p className="mt-3 text-sm text-slate-500">Loading...</p>
-        ) : members.length === 0 ? (
-          <p className="mt-3 text-sm text-slate-500">
-            No members yet. Add someone to get started.
-          </p>
-        ) : (
+        {loadingMembers && (
+          <StatusBanner variant="loading" message="Loading members..." />
+        )}
+        {membersError && (
+          <StatusBanner
+            variant="error"
+            message={membersError}
+            onRetry={() => Number.isFinite(groupId) && loadGroup(groupId)}
+          />
+        )}
+        {!loadingMembers && !membersError && members.length === 0 && (
+          <StatusBanner
+            variant="empty"
+            message="No members yet. Add someone to get started."
+          />
+        )}
+        {!loadingMembers && !membersError && members.length > 0 && (
           <div className="mt-4 max-h-56 overflow-y-auto pr-1">
             <ul className="space-y-2">
               {members.map((m) => (
@@ -852,7 +1001,7 @@ export default function GroupPage() {
             <button
               onClick={addExpense}
               disabled={
-                loading ||
+                addingExpense ||
                 !desc.trim() ||
                 !amount ||
                 paidByUserId === "" ||
@@ -863,7 +1012,7 @@ export default function GroupPage() {
               }
               className="rounded-xl border border-slate-300 bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {loading ? "Saving..." : "Add"}
+              {addingExpense ? "Saving..." : "Add"}
             </button>
           </div>
 
@@ -992,6 +1141,16 @@ export default function GroupPage() {
             </div>
           )}
         </div>
+        {addingExpense && (
+          <StatusBanner variant="loading" message="Adding expense..." />
+        )}
+        {addExpenseError && (
+          <StatusBanner
+            variant="error"
+            message={addExpenseError}
+            onRetry={addExpense}
+          />
+        )}
       </div>
 
       <div className={cardClassName}>
@@ -999,18 +1158,31 @@ export default function GroupPage() {
           Expenses
         </h2>
 
-        {loadingExpenses ? (
-          <p className="mt-3 text-sm text-slate-500">Loading...</p>
-        ) : expenses.length === 0 ? (
-          <p className="mt-3 text-sm text-slate-500">
-            No expenses yet. Add the first one above.
-          </p>
-        ) : (
+        {loadingExpenses && (
+          <StatusBanner variant="loading" message="Loading expenses..." />
+        )}
+        {expensesError && (
+          <StatusBanner
+            variant="error"
+            message={expensesError}
+            onRetry={() => Number.isFinite(groupId) && loadExpenses(groupId)}
+          />
+        )}
+        {deleteExpenseError && (
+          <StatusBanner variant="error" message={deleteExpenseError} />
+        )}
+        {!loadingExpenses && !expensesError && expenses.length === 0 && (
+          <StatusBanner
+            variant="empty"
+            message="No expenses yet. Add the first one above."
+          />
+        )}
+        {!loadingExpenses && !expensesError && expenses.length > 0 && (
           <div className="mt-4 max-h-72 overflow-y-auto pr-1">
             <ul className="space-y-3">
-      {expenses.map((ex, index) => (
-        <li
-          key={`${ex.expenseId ?? "new"}-${ex.payerUserId}-${ex.amount}-${ex.createdAt ?? index}`}
+              {expenses.map((ex, index) => (
+                <li
+                  key={`${ex.expenseId ?? "new"}-${ex.payerUserId}-${ex.amount}-${ex.createdAt ?? index}`}
                   className="rounded-xl border border-slate-200 bg-white px-3 py-3"
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -1272,6 +1444,16 @@ export default function GroupPage() {
               </div>
             )}
           </div>
+          {updatingExpense && (
+            <StatusBanner variant="loading" message="Updating expense..." />
+          )}
+          {updateExpenseError && (
+            <StatusBanner
+              variant="error"
+              message={updateExpenseError}
+              onRetry={updateExpense}
+            />
+          )}
         </div>
       )}
 
@@ -1315,13 +1497,30 @@ export default function GroupPage() {
           </p>
         </div>
 
-        {loadingSettlements ? (
-          <p className="mt-3 text-sm text-slate-500">Loading...</p>
-        ) : settlements.length === 0 ? (
-          <p className="mt-3 text-sm text-slate-500">
-            No transfers needed right now.
-          </p>
-        ) : (
+        {confirmationIdError && (
+          <StatusBanner
+            variant="error"
+            message={confirmationIdError}
+            onRetry={generateConfirmationIdFromApi}
+          />
+        )}
+        {confirmTransferError && (
+          <StatusBanner variant="error" message={confirmTransferError} />
+        )}
+        {loadingSettlements && (
+          <StatusBanner variant="loading" message="Loading settlements..." />
+        )}
+        {settlementsError && (
+          <StatusBanner
+            variant="error"
+            message={settlementsError}
+            onRetry={() => Number.isFinite(groupId) && loadSettlements(groupId)}
+          />
+        )}
+        {!loadingSettlements && !settlementsError && settlements.length === 0 && (
+          <StatusBanner variant="empty" message="No transfers needed right now." />
+        )}
+        {!loadingSettlements && !settlementsError && settlements.length > 0 && (
           (() => {
             const sortedTransfers = [...settlements].sort((a, b) => {
               if (a.fromUserId !== b.fromUserId) {
@@ -1330,7 +1529,7 @@ export default function GroupPage() {
               if (a.toUserId !== b.toUserId) {
                 return a.toUserId - b.toUserId;
               }
-              return a.amount - b.amount;
+              return Number(a.amount) - Number(b.amount);
             });
 
             return (
@@ -1433,13 +1632,20 @@ export default function GroupPage() {
           </button>
         </div>
 
-        {loadingLedger ? (
-          <p className="mt-3 text-sm text-slate-500">Loading...</p>
-        ) : ledgerEntries.length === 0 ? (
-          <p className="mt-3 text-sm text-slate-500">
-            No ledger entries yet.
-          </p>
-        ) : (
+        {loadingLedger && (
+          <StatusBanner variant="loading" message="Loading ledger..." />
+        )}
+        {ledgerError && (
+          <StatusBanner
+            variant="error"
+            message={ledgerError}
+            onRetry={() => Number.isFinite(groupId) && loadLedger(groupId)}
+          />
+        )}
+        {!loadingLedger && !ledgerError && ledgerEntries.length === 0 && (
+          <StatusBanner variant="empty" message="No ledger entries yet." />
+        )}
+        {!loadingLedger && !ledgerError && ledgerEntries.length > 0 && (
           <div className="mt-4 space-y-2">
             {ledgerEntries.map((entry) => {
               const member = members.find((m) => m.id === entry.userId);
@@ -1528,11 +1734,34 @@ export default function GroupPage() {
           </div>
         </div>
         <div className="mt-3 text-sm text-slate-600">
-          {loadingOwes && "Loading..."}
-          {!loadingOwes && owesAmount !== null && (
+          {loadingOwes && (
+            <StatusBanner variant="loading" message="Loading owes..." />
+          )}
+          {owesError && (
+            <StatusBanner
+              variant="error"
+              message={owesError}
+              onRetry={() =>
+                Number.isFinite(groupId) &&
+                (owesHistoricalAmount !== null
+                  ? loadOwesHistorical(groupId)
+                  : loadOwes(groupId))
+              }
+            />
+          )}
+          {!loadingOwes &&
+            !owesError &&
+            owesAmount === null &&
+            owesHistoricalAmount === null && (
+              <StatusBanner
+                variant="empty"
+                message="Select two members to see what’s owed."
+              />
+            )}
+          {!loadingOwes && !owesError && owesAmount !== null && (
             <div>Current owes: ${owesAmount.toFixed(2)}</div>
           )}
-          {!loadingOwes && owesHistoricalAmount !== null && (
+          {!loadingOwes && !owesError && owesHistoricalAmount !== null && (
             <div>Historical owes: ${owesHistoricalAmount.toFixed(2)}</div>
           )}
         </div>
@@ -1561,45 +1790,64 @@ export default function GroupPage() {
           onChange={(e) => setConfirmedFilter(e.target.value)}
         />
 
-        {loadingConfirmedTransfers ? (
-          <p className="mt-3 text-sm text-slate-500">Loading...</p>
-        ) : confirmedTransfers.length === 0 ? (
-          <p className="mt-3 text-sm text-slate-500">
-            No confirmed transfers yet.
-          </p>
-        ) : (
-          <div className="mt-4 space-y-2">
-            {confirmedTransfers.map((transfer) => {
-              const fromMember = members.find(
-                (m) => m.id === transfer.fromUserId,
-              );
-              const toMember = members.find(
-                (m) => m.id === transfer.toUserId,
-              );
-              const fromLabel = fromMember
-                ? getMemberName(fromMember)
-                : `User #${transfer.fromUserId}`;
-              const toLabel = toMember
-                ? getMemberName(toMember)
-                : `User #${transfer.toUserId}`;
-              return (
-                <div
-                  key={transfer.id}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600"
-                >
-                  <div className="text-sm font-medium text-slate-900">
-                    {fromLabel} → {toLabel}: $
-                    {Number(transfer.amount).toFixed(2)}
-                  </div>
-                  <div className="mt-1">
-                    Confirmation: {transfer.confirmationId ?? "—"} ·{" "}
-                    {new Date(transfer.createdAt).toLocaleString()}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+        {loadingConfirmedTransfers && (
+          <StatusBanner
+            variant="loading"
+            message="Loading confirmed transfers..."
+          />
         )}
+        {confirmedTransfersError && (
+          <StatusBanner
+            variant="error"
+            message={confirmedTransfersError}
+            onRetry={() =>
+              Number.isFinite(groupId) && loadConfirmedTransfers(groupId)
+            }
+          />
+        )}
+        {!loadingConfirmedTransfers &&
+          !confirmedTransfersError &&
+          confirmedTransfers.length === 0 && (
+            <StatusBanner
+              variant="empty"
+              message="No confirmed transfers yet."
+            />
+          )}
+        {!loadingConfirmedTransfers &&
+          !confirmedTransfersError &&
+          confirmedTransfers.length > 0 && (
+            <div className="mt-4 space-y-2">
+              {confirmedTransfers.map((transfer) => {
+                const fromMember = members.find(
+                  (m) => m.id === transfer.fromUserId,
+                );
+                const toMember = members.find(
+                  (m) => m.id === transfer.toUserId,
+                );
+                const fromLabel = fromMember
+                  ? getMemberName(fromMember)
+                  : `User #${transfer.fromUserId}`;
+                const toLabel = toMember
+                  ? getMemberName(toMember)
+                  : `User #${transfer.toUserId}`;
+                return (
+                  <div
+                    key={transfer.id}
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600"
+                  >
+                    <div className="text-sm font-medium text-slate-900">
+                      {fromLabel} → {toLabel}: $
+                      {Number(transfer.amount).toFixed(2)}
+                    </div>
+                    <div className="mt-1">
+                      Confirmation: {transfer.confirmationId ?? "—"} ·{" "}
+                      {new Date(transfer.createdAt).toLocaleString()}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
       </div>
 
       <div className={cardClassName}>
@@ -1616,13 +1864,20 @@ export default function GroupPage() {
           </button>
         </div>
 
-        {loadingEvents ? (
-          <p className="mt-3 text-sm text-slate-500">Loading...</p>
-        ) : events.length === 0 ? (
-          <p className="mt-3 text-sm text-slate-500">
-            No events yet.
-          </p>
-        ) : (
+        {loadingEvents && (
+          <StatusBanner variant="loading" message="Loading events..." />
+        )}
+        {eventsError && (
+          <StatusBanner
+            variant="error"
+            message={eventsError}
+            onRetry={() => Number.isFinite(groupId) && loadEvents(groupId)}
+          />
+        )}
+        {!loadingEvents && !eventsError && events.length === 0 && (
+          <StatusBanner variant="empty" message="No events yet." />
+        )}
+        {!loadingEvents && !eventsError && events.length > 0 && (
           <div className="mt-4 max-h-64 overflow-y-auto pr-1">
             <ul className="space-y-2">
               {events.map((event) => (
