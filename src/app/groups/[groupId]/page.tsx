@@ -281,6 +281,7 @@ export default function GroupPage() {
     loadGroup(groupId);
     loadExpenses(groupId);
     loadSettlements(groupId);
+    loadEvents(groupId);
   }, [groupId]);
 
   useEffect(() => {
@@ -534,7 +535,11 @@ export default function GroupPage() {
       setSplitMode("equal");
       setIdempotencyKey("");
 
-      await Promise.all([loadExpenses(groupId), loadSettlements(groupId)]);
+      await Promise.all([
+        loadExpenses(groupId),
+        loadSettlements(groupId),
+        loadEvents(groupId),
+      ]);
     } catch (e: unknown) {
       if (e instanceof Error) setError(e.message ?? "Failed to add expense");
       else setError(String(e) || "Failed to add expense");
@@ -665,7 +670,11 @@ export default function GroupPage() {
           body: JSON.stringify(payload),
         },
       );
-      await Promise.all([loadExpenses(groupId), loadSettlements(groupId)]);
+      await Promise.all([
+        loadExpenses(groupId),
+        loadSettlements(groupId),
+        loadEvents(groupId),
+      ]);
       resetEditExpense();
     } catch (e: unknown) {
       if (e instanceof Error) setError(e.message ?? "Failed to update expense");
@@ -682,7 +691,11 @@ export default function GroupPage() {
       await api<void>(`/groups/${groupId}/expenses/${expenseId}`, {
         method: "DELETE",
       });
-      await Promise.all([loadExpenses(groupId), loadSettlements(groupId)]);
+      await Promise.all([
+        loadExpenses(groupId),
+        loadSettlements(groupId),
+        loadEvents(groupId),
+      ]);
     } catch (e: unknown) {
       if (e instanceof Error) setError(e.message ?? "Failed to delete expense");
       else setError(String(e) || "Failed to delete expense");
@@ -849,8 +862,8 @@ export default function GroupPage() {
                 paidByUserId === "" ||
                 members.length === 0 ||
                 (splitMode === "exact" &&
-                  (exactRemaining === null ||
-                    Math.abs(exactRemaining) > 0.01))
+                  exactRemaining !== null &&
+                  Math.abs(exactRemaining) > 0.01)
               }
               className="rounded-xl border border-slate-300 bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
