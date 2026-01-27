@@ -165,6 +165,20 @@ export default function GroupPage() {
     return value.toFixed(2);
   }
 
+  function getRemainingAmount(
+    total: string,
+    amounts: Record<number, string>,
+    ids: number[],
+  ) {
+    const totalValue = Number(total);
+    if (!Number.isFinite(totalValue)) return null;
+    const sum = ids.reduce((acc, id) => {
+      const value = Number(amounts[id] ?? "");
+      return acc + (Number.isFinite(value) ? value : 0);
+    }, 0);
+    return totalValue - sum;
+  }
+
   function generateUuid() {
     if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
       return crypto.randomUUID();
@@ -853,6 +867,18 @@ export default function GroupPage() {
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
                 Exact amounts
               </p>
+              <p className="mt-2 text-xs text-slate-500">
+                {(() => {
+                  const remaining = getRemainingAmount(
+                    amount,
+                    exactAmounts,
+                    members.map((m) => m.id),
+                  );
+                  if (remaining === null) return "Enter a total amount first.";
+                  const label = remaining < 0 ? "Over by" : "Remaining";
+                  return `${label}: $${Math.abs(remaining).toFixed(2)}`;
+                })()}
+              </p>
               <div className="mt-3 space-y-2">
                 {members.map((member) => (
                   <div
@@ -1118,6 +1144,20 @@ export default function GroupPage() {
               <div className="rounded-xl border border-slate-200 bg-white p-3">
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
                   Exact amounts
+                </p>
+                <p className="mt-2 text-xs text-slate-500">
+                  {(() => {
+                    const remaining = getRemainingAmount(
+                      editAmount,
+                      editExactAmounts,
+                      members.map((m) => m.id),
+                    );
+                    if (remaining === null) {
+                      return "Enter a total amount first.";
+                    }
+                    const label = remaining < 0 ? "Over by" : "Remaining";
+                    return `${label}: $${Math.abs(remaining).toFixed(2)}`;
+                  })()}
                 </p>
                 <div className="mt-3 space-y-2">
                   {members.map((member) => (
