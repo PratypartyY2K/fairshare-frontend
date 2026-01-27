@@ -43,39 +43,38 @@ The frontend expects the following backend endpoints (base URL from `NEXT_PUBLIC
 
 ### Groups
 
-- `GET /groups` -> `[{ id, name? }]`
-- `POST /groups` -> `{ id, name? }`
-- `GET /groups/{groupId}` -> `{ id, name?, members: [{ id, name?, userName? }] }`
+- `GET /groups` -> `{ items: [{ id, name? }], totalItems, totalPages, currentPage, pageSize }`
+- `POST /groups` expects `{ name }` -> `{ id, name? }`
+- `GET /groups/{groupId}` -> `{ id, name?, members: [{ id, name? }] }`
 - `PATCH /groups/{groupId}` -> `{ id, name?, members: [...] }`
 
 ### Members
 
-- `POST /groups/{groupId}/members` expects `{ userName }` -> `{ userId, name }`
+- `POST /groups/{groupId}/members` expects `{ name }` -> `{ userId, name }`
 
 ### Expenses
 
-- `GET /groups/{groupId}/expenses` -> `[{ expenseId, groupId, description, amount, payerUserId, createdAt, splits: [{ userId, shareAmount }] }]`
+- `GET /groups/{groupId}/expenses` -> `{ items: [{ expenseId, groupId, description, amount, payerUserId, createdAt, splits: [{ userId, shareAmount }] }], totalItems, totalPages, currentPage, pageSize }`
 - `POST /groups/{groupId}/expenses` expects:
   ```json
   {
     "description": "string",
-    "amount": 0,
+    "amount": "0.00",
     "payerUserId": 0,
-    "paidByUserId": 0,
     "participantUserIds": [0],
     "shares": [1],
-    "exactAmounts": [0],
-    "percentages": [0]
+    "exactAmounts": ["0.00"],
+    "percentages": ["0.00"]
   }
   ```
-  Notes: send only one split mode (exactAmounts, percentages, or shares). If none is provided, the backend uses equal split. The backend accepts either `payerUserId` or `paidByUserId`.
-- `PATCH /groups/{groupId}/expenses/{expenseId}` -> updated expense response
+  Notes: send only one split mode (exactAmounts, percentages, or shares). If none is provided, the backend uses equal split. `paidByUserId` is deprecated; use `payerUserId`.
+- `PATCH /groups/{groupId}/expenses/{expenseId}` -> updated expense response (200)
 - `DELETE /groups/{groupId}/expenses/{expenseId}` -> 204
 
 ### Settlements
 
 - `GET /groups/{groupId}/settlements` -> `{ transfers: [{ fromUserId, toUserId, amount }] }`
-- `POST /groups/{groupId}/settlements/confirm` -> 204
+- `POST /groups/{groupId}/settlements/confirm` -> `{ confirmationId, appliedTransfersCount }`
   - Optional header: `Confirmation-Id: <uuid>` (overrides body `confirmationId` if body omits it)
   ```json
   {
@@ -86,13 +85,13 @@ The frontend expects the following backend endpoints (base URL from `NEXT_PUBLIC
   }
   ```
   Notes: `confirmationId` is optional and can be used for idempotency.
-- `GET /groups/{groupId}/confirmation-id` -> `{ "<key>": "<uuid>" }` (generate a confirmation id)
+- `GET /groups/{groupId}/api/confirmation-id` -> `{ confirmationId }` (generate a confirmation id)
 
 ### Ledger and analytics
 
 - `GET /groups/{groupId}/ledger` -> `{ entries: [{ userId, netBalance }] }`
-- `GET /groups/{groupId}/events` -> `[{ eventId, groupId, expenseId, eventType, payload, createdAt }]`
-- `GET /groups/{groupId}/confirmed-transfers?confirmationId=...` -> `[{ id, groupId, fromUserId, toUserId, amount, confirmationId, createdAt }]`
+- `GET /groups/{groupId}/events` -> `{ items: [{ eventId, groupId, expenseId, eventType, payload, createdAt }], totalItems, totalPages, currentPage, pageSize }`
+- `GET /groups/{groupId}/confirmed-transfers?confirmationId=...` -> `{ items: [{ id, groupId, fromUserId, toUserId, amount, confirmationId, createdAt }], totalItems, totalPages, currentPage, pageSize }`
 - `GET /groups/{groupId}/owes?fromUserId=...&toUserId=...` -> `{ amount }`
 - `GET /groups/{groupId}/owes/historical?fromUserId=...&toUserId=...` -> `{ amount }`
 

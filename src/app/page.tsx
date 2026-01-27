@@ -13,6 +13,14 @@ type Group = {
   name?: string;
 };
 
+type PaginatedResponse<T> = {
+  items: T[];
+  totalItems: number;
+  totalPages: number;
+  currentPage: number;
+  pageSize: number;
+};
+
 export default function HomePage() {
   const [groupName, setGroupName] = useState("");
   const [createdGroupId, setCreatedGroupId] = useState<number | null>(null);
@@ -31,8 +39,8 @@ export default function HomePage() {
     setError(null);
     setLoadingGroups(true);
     try {
-      const res = await api<Group[]>("/groups");
-      setGroups(res);
+      const res = await api<PaginatedResponse<Group>>("/groups");
+      setGroups(res.items ?? []);
     } catch (e: unknown) {
       if (e instanceof Error) {
         setError(e.message);

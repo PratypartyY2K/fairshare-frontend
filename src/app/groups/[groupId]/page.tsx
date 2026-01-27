@@ -8,7 +8,6 @@ import { api } from "../../../lib/api";
 type Member = {
   id: number;
   name?: string;
-  userName?: string;
 };
 
 type GroupResponse = {
@@ -19,14 +18,14 @@ type GroupResponse = {
 
 type Split = {
   userId: number;
-  shareAmount: number;
+  shareAmount: string;
 };
 
 type Expense = {
   expenseId: number;
   groupId: number;
   description: string;
-  amount: number;
+  amount: string;
   payerUserId: number;
   createdAt?: string;
   splits?: Split[];
@@ -35,12 +34,12 @@ type Expense = {
 type SettlementTransfer = {
   fromUserId: number;
   toUserId: number;
-  amount: number;
+  amount: string;
 };
 
 type LedgerEntry = {
   userId: number;
-  netBalance: number;
+  netBalance: string;
 };
 
 type EventResponse = {
@@ -57,9 +56,17 @@ type ConfirmedTransfer = {
   groupId: number;
   fromUserId: number;
   toUserId: number;
-  amount: number;
+  amount: string;
   confirmationId?: string;
   createdAt: string;
+};
+
+type PaginatedResponse<T> = {
+  items: T[];
+  totalItems: number;
+  totalPages: number;
+  currentPage: number;
+  pageSize: number;
 };
 
 export default function GroupPage() {
@@ -145,11 +152,17 @@ export default function GroupPage() {
     "rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm backdrop-blur";
 
   function getMemberName(member: Member) {
-    return member.name?.trim() || member.userName?.trim() || "Member";
+    return member.name?.trim() || "Member";
   }
 
   function getTransferKey(transfer: SettlementTransfer) {
-    return `${transfer.fromUserId}-${transfer.toUserId}-${transfer.amount.toFixed(2)}`;
+    const amount = Number(transfer.amount);
+    const normalized = Number.isFinite(amount) ? amount.toFixed(2) : "0.00";
+    return `${transfer.fromUserId}-${transfer.toUserId}-${normalized}`;
+  }
+
+  function formatAmount(value: number) {
+    return value.toFixed(2);
   }
 
   function generateUuid() {
@@ -223,11 +236,10 @@ export default function GroupPage() {
   async function generateConfirmationIdFromApi() {
     if (!Number.isFinite(groupId)) return;
     try {
-      const res = await api<Record<string, string>>(
-        `/groups/${groupId}/confirmation-id`,
+      const res = await api<{ confirmationId: string }>(
+        `/groups/${groupId}/api/confirmation-id`,
       );
-      const value = Object.values(res ?? {}).find((val) => val?.trim());
-      setConfirmationId(value ?? "");
+      setConfirmationId(res?.confirmationId ?? "");
     } catch (e: unknown) {
       setError(
         e instanceof Error ? e.message : "Failed to generate confirmation ID",
@@ -275,7 +287,7 @@ export default function GroupPage() {
         `/groups/${groupId}/members`,
         {
           method: "POST",
-          body: JSON.stringify({ userName }),
+          body: JSON.stringify({ name: userName }),
         },
       );
       setUserName("");
@@ -317,8 +329,10 @@ export default function GroupPage() {
   async function loadExpenses(gid: number) {
     setLoadingExpenses(true);
     try {
-      const res = await api<Expense[]>(`/groups/${gid}/expenses`);
-      setExpenses(res);
+      const res = await api<PaginatedResponse<Expense>>(
+        `/groups/${gid}/expenses`,
+      );
+      setExpenses(res.items ?? []);
     } finally {
       setLoadingExpenses(false);
     }
@@ -351,8 +365,10 @@ export default function GroupPage() {
   async function loadEvents(gid: number) {
     setLoadingEvents(true);
     try {
-      const res = await api<EventResponse[]>(`/groups/${gid}/events`);
-      setEvents(res ?? []);
+      const res = await api<PaginatedResponse<EventResponse>>(
+        `/groups/${gid}/events`,
+      );
+      setEvents(res.items ?? []);
     } finally {
       setLoadingEvents(false);
     }
@@ -364,10 +380,10 @@ export default function GroupPage() {
       const query = confirmedFilter.trim()
         ? `?confirmationId=${encodeURIComponent(confirmedFilter.trim())}`
         : "";
-      const res = await api<ConfirmedTransfer[]>(
+      const res = await api<PaginatedResponse<ConfirmedTransfer>>(
         `/groups/${gid}/confirmed-transfers${query}`,
       );
-      setConfirmedTransfers(res ?? []);
+      setConfirmedTransfers(res.items ?? []);
     } finally {
       setLoadingConfirmedTransfers(false);
     }
@@ -377,10 +393,11 @@ export default function GroupPage() {
     if (owesFromUserId === "" || owesToUserId === "") return;
     setLoadingOwes(true);
     try {
-      const res = await api<{ amount: number }>(
+      const res = await api<{ amount: string }>(
         `/groups/${gid}/owes?fromUserId=${owesFromUserId}&toUserId=${owesToUserId}`,
       );
-      setOwesAmount(res.amount);
+      const value = Number(res.amount);
+      setOwesAmount(Number.isFinite(value) ? value : 0);
     } finally {
       setLoadingOwes(false);
     }
@@ -390,10 +407,11 @@ export default function GroupPage() {
     if (owesFromUserId === "" || owesToUserId === "") return;
     setLoadingOwes(true);
     try {
-      const res = await api<{ amount: number }>(
+      const res = await api<{ amount: string }>(
         `/groups/${gid}/owes/historical?fromUserId=${owesFromUserId}&toUserId=${owesToUserId}`,
       );
-      setOwesHistoricalAmount(res.amount);
+      const value = Number(res.amount);
+      setOwesHistoricalAmount(Number.isFinite(value) ? value : 0);
     } finally {
       setLoadingOwes(false);
     }
@@ -417,18 +435,18 @@ export default function GroupPage() {
       splitMode === "shares"
         ? participantUserIds.map((id) => Number(shares[id] ?? ""))
         : [];
-    const exactAmountList =
+    const exactAmountNumbers =
       splitMode === "exact"
         ? participantUserIds.map((id) => Number(exactAmounts[id] ?? ""))
         : [];
-    const percentageList =
+    const percentageNumbers =
       splitMode === "percentage"
         ? participantUserIds.map((id) => Number(percentages[id] ?? ""))
         : [];
 
     if (
       splitMode === "exact" &&
-      exactAmountList.some((val) => !Number.isFinite(val))
+      exactAmountNumbers.some((val) => !Number.isFinite(val))
     ) {
       setError("Enter an exact amount for each member.");
       setLoading(false);
@@ -436,7 +454,7 @@ export default function GroupPage() {
     }
     if (
       splitMode === "percentage" &&
-      percentageList.some((val) => !Number.isFinite(val))
+      percentageNumbers.some((val) => !Number.isFinite(val))
     ) {
       setError("Enter a percentage for each member.");
       setLoading(false);
@@ -451,7 +469,7 @@ export default function GroupPage() {
       return;
     }
     if (splitMode === "exact") {
-      const exactSum = exactAmountList.reduce((sum, val) => sum + val, 0);
+      const exactSum = exactAmountNumbers.reduce((sum, val) => sum + val, 0);
       if (Math.abs(exactSum - amt) > 0.01) {
         setError("Exact amounts must add up to the total.");
         setLoading(false);
@@ -459,7 +477,10 @@ export default function GroupPage() {
       }
     }
     if (splitMode === "percentage") {
-      const percentageSum = percentageList.reduce((sum, val) => sum + val, 0);
+      const percentageSum = percentageNumbers.reduce(
+        (sum, val) => sum + val,
+        0,
+      );
       if (Math.abs(percentageSum - 100) > 0.01) {
         setError("Percentages must add up to 100%.");
         setLoading(false);
@@ -470,13 +491,17 @@ export default function GroupPage() {
     try {
       const payload: Record<string, unknown> = {
         description: desc,
-        amount: amt,
+        amount: formatAmount(amt),
         payerUserId: paidByUserId,
         participantUserIds,
       };
       if (splitMode === "shares") payload.shares = sharesList;
-      if (splitMode === "exact") payload.exactAmounts = exactAmountList;
-      if (splitMode === "percentage") payload.percentages = percentageList;
+      if (splitMode === "exact") {
+        payload.exactAmounts = exactAmountNumbers.map(formatAmount);
+      }
+      if (splitMode === "percentage") {
+        payload.percentages = percentageNumbers.map(formatAmount);
+      }
 
       await api<void>(`/groups/${groupId}/expenses`, {
         method: "POST",
@@ -508,7 +533,7 @@ export default function GroupPage() {
     setEditDesc(expense.description ?? "");
     setEditAmount(String(expense.amount ?? ""));
     setEditPaidByUserId(expense.payerUserId ?? "");
-    setEditSplitMode("exact");
+    setEditSplitMode("equal");
     const splitSeed = (expense.splits ?? []).reduce<Record<number, string>>(
       (acc, split) => {
         acc[split.userId] = String(split.shareAmount);
@@ -550,18 +575,18 @@ export default function GroupPage() {
       editSplitMode === "shares"
         ? participantUserIds.map((id) => Number(editShares[id] ?? ""))
         : [];
-    const exactAmountList =
+    const exactAmountNumbers =
       editSplitMode === "exact"
         ? participantUserIds.map((id) => Number(editExactAmounts[id] ?? ""))
         : [];
-    const percentageList =
+    const percentageNumbers =
       editSplitMode === "percentage"
         ? participantUserIds.map((id) => Number(editPercentages[id] ?? ""))
         : [];
 
     if (
       editSplitMode === "exact" &&
-      exactAmountList.some((val) => !Number.isFinite(val))
+      exactAmountNumbers.some((val) => !Number.isFinite(val))
     ) {
       setError("Enter an exact amount for each member.");
       setUpdatingExpense(false);
@@ -569,7 +594,7 @@ export default function GroupPage() {
     }
     if (
       editSplitMode === "percentage" &&
-      percentageList.some((val) => !Number.isFinite(val))
+      percentageNumbers.some((val) => !Number.isFinite(val))
     ) {
       setError("Enter a percentage for each member.");
       setUpdatingExpense(false);
@@ -584,7 +609,7 @@ export default function GroupPage() {
       return;
     }
     if (editSplitMode === "exact") {
-      const exactSum = exactAmountList.reduce((sum, val) => sum + val, 0);
+      const exactSum = exactAmountNumbers.reduce((sum, val) => sum + val, 0);
       if (Math.abs(exactSum - amt) > 0.01) {
         setError("Exact amounts must add up to the total.");
         setUpdatingExpense(false);
@@ -592,7 +617,10 @@ export default function GroupPage() {
       }
     }
     if (editSplitMode === "percentage") {
-      const percentageSum = percentageList.reduce((sum, val) => sum + val, 0);
+      const percentageSum = percentageNumbers.reduce(
+        (sum, val) => sum + val,
+        0,
+      );
       if (Math.abs(percentageSum - 100) > 0.01) {
         setError("Percentages must add up to 100%.");
         setUpdatingExpense(false);
@@ -603,13 +631,17 @@ export default function GroupPage() {
     try {
       const payload: Record<string, unknown> = {
         description: editDesc,
-        amount: amt,
+        amount: formatAmount(amt),
         payerUserId: editPaidByUserId,
         participantUserIds,
       };
       if (editSplitMode === "shares") payload.shares = sharesList;
-      if (editSplitMode === "exact") payload.exactAmounts = exactAmountList;
-      if (editSplitMode === "percentage") payload.percentages = percentageList;
+      if (editSplitMode === "exact") {
+        payload.exactAmounts = exactAmountNumbers.map(formatAmount);
+      }
+      if (editSplitMode === "percentage") {
+        payload.percentages = percentageNumbers.map(formatAmount);
+      }
 
       await api<void>(
         `/groups/${groupId}/expenses/${editingExpenseId}`,
@@ -928,9 +960,9 @@ export default function GroupPage() {
         ) : (
           <div className="mt-4 max-h-72 overflow-y-auto pr-1">
             <ul className="space-y-3">
-              {expenses.map((ex, index) => (
-                <li
-                  key={`${ex.expenseId ?? "new"}-${ex.payerUserId}-${ex.amount}-${ex.createdAt ?? index}`}
+      {expenses.map((ex, index) => (
+        <li
+          key={`${ex.expenseId ?? "new"}-${ex.payerUserId}-${ex.amount}-${ex.createdAt ?? index}`}
                   className="rounded-xl border border-slate-200 bg-white px-3 py-3"
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -1360,13 +1392,13 @@ export default function GroupPage() {
                   <span className="font-medium text-slate-900">{label}</span>
                   <span
                     className={
-                      entry.netBalance >= 0
+                      Number(entry.netBalance) >= 0
                         ? "text-emerald-700"
                         : "text-rose-700"
                     }
                   >
-                    {entry.netBalance >= 0 ? "+" : "-"}$
-                    {Math.abs(entry.netBalance).toFixed(2)}
+                    {Number(entry.netBalance) >= 0 ? "+" : "-"}$
+                    {Math.abs(Number(entry.netBalance)).toFixed(2)}
                   </span>
                 </div>
               );
