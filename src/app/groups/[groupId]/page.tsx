@@ -527,6 +527,7 @@ export default function GroupPage() {
 
       setDesc("");
       setAmount("");
+      setPaidByUserId("");
       setExactAmounts({});
       setPercentages({});
       setShares({});
@@ -690,6 +691,15 @@ export default function GroupPage() {
     }
   }
 
+  const exactRemaining =
+    splitMode === "exact"
+      ? getRemainingAmount(
+          amount,
+          exactAmounts,
+          members.map((m) => m.id),
+        )
+      : null;
+
   return (
     <main className="min-h-screen bg-gradient-to-br from-amber-50 via-rose-50 to-orange-50 p-6 text-slate-900">
       <div className="mx-auto flex max-w-3xl flex-col gap-6">
@@ -837,7 +847,10 @@ export default function GroupPage() {
                 !desc.trim() ||
                 !amount ||
                 paidByUserId === "" ||
-                members.length === 0
+                members.length === 0 ||
+                (splitMode === "exact" &&
+                  (exactRemaining === null ||
+                    Math.abs(exactRemaining) > 0.01))
               }
               className="rounded-xl border border-slate-300 bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
