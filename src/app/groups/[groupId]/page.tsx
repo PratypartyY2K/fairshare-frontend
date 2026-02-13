@@ -167,6 +167,14 @@ function getVisiblePages(currentPage: number, totalPages: number) {
     .sort((a, b) => a - b);
 }
 
+function toApiPage(uiPage: number) {
+  return Math.max(0, uiPage - 1);
+}
+
+function toUiPage(apiPage: number) {
+  return Math.max(1, apiPage + 1);
+}
+
 function PaginationControls({
   currentPage,
   totalPages,
@@ -957,7 +965,7 @@ export default function GroupPage() {
     setLoadingConfirmedTransfers(true);
     setConfirmedTransfersError(null);
     void api<PaginatedResponse<ConfirmedTransfer>>(
-      `/groups/${groupId}/confirmed-transfers?page=1&size=${defaultPageSize}&sort=${encodeURIComponent(defaultListSort)}`,
+      `/groups/${groupId}/confirmed-transfers?page=0&size=${defaultPageSize}&sort=${encodeURIComponent(defaultListSort)}`,
     )
       .then((res) => {
         setConfirmedTransfers(res.items ?? []);
@@ -1062,7 +1070,7 @@ export default function GroupPage() {
     setExpensesError(null);
     try {
       const query = new URLSearchParams({
-        page: String(page),
+        page: String(toApiPage(page)),
         size: String(pageSize),
         sort,
       });
@@ -1071,8 +1079,8 @@ export default function GroupPage() {
       );
       setExpenses(res.items ?? []);
       setExpensesPage(
-        Number.isFinite(res.currentPage) && res.currentPage > 0
-          ? res.currentPage
+        Number.isFinite(res.currentPage) && res.currentPage >= 0
+          ? toUiPage(res.currentPage)
           : page,
       );
       setExpensesTotalPages(
@@ -1163,7 +1171,7 @@ export default function GroupPage() {
     setEventsError(null);
     try {
       const query = new URLSearchParams({
-        page: String(page),
+        page: String(toApiPage(page)),
         size: String(pageSize),
         sort,
       });
@@ -1172,8 +1180,8 @@ export default function GroupPage() {
       );
       setEvents(res.items ?? []);
       setEventsPage(
-        Number.isFinite(res.currentPage) && res.currentPage > 0
-          ? res.currentPage
+        Number.isFinite(res.currentPage) && res.currentPage >= 0
+          ? toUiPage(res.currentPage)
           : page,
       );
       setEventsTotalPages(
@@ -1205,7 +1213,7 @@ export default function GroupPage() {
     setConfirmedTransfersError(null);
     try {
       const query = new URLSearchParams({
-        page: String(page),
+        page: String(toApiPage(page)),
         size: String(pageSize),
         sort,
       });
@@ -1217,8 +1225,8 @@ export default function GroupPage() {
       );
       setConfirmedTransfers(res.items ?? []);
       setConfirmedTransfersPage(
-        Number.isFinite(res.currentPage) && res.currentPage > 0
-          ? res.currentPage
+        Number.isFinite(res.currentPage) && res.currentPage >= 0
+          ? toUiPage(res.currentPage)
           : page,
       );
       setConfirmedTransfersTotalPages(

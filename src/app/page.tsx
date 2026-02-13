@@ -54,6 +54,14 @@ function getVisiblePages(currentPage: number, totalPages: number) {
     .sort((a, b) => a - b);
 }
 
+function toApiPage(uiPage: number) {
+  return Math.max(0, uiPage - 1);
+}
+
+function toUiPage(apiPage: number) {
+  return Math.max(1, apiPage + 1);
+}
+
 function PaginationControls({
   currentPage,
   totalPages,
@@ -232,22 +240,22 @@ export default function HomePage() {
     setLoadingGroups(true);
     try {
       const query = new URLSearchParams({
-        page: String(page),
+        page: String(toApiPage(page)),
         pageSize: String(pageSize),
         sort,
       });
       if (nameFilter.trim()) query.set("name", nameFilter.trim());
       const res = await api<PaginatedResponse<Group>>(`/groups?${query.toString()}`);
-      const safePage =
-        Number.isFinite(res.currentPage) && res.currentPage > 0
-          ? res.currentPage
+      const normalizedPage =
+        Number.isFinite(res.currentPage) && res.currentPage >= 0
+          ? toUiPage(res.currentPage)
           : page;
       const safeTotalPages =
         Number.isFinite(res.totalPages) && res.totalPages > 0 ? res.totalPages : 1;
       const items = res.items ?? [];
 
       setGroups(items);
-      setGroupsPage(safePage);
+      setGroupsPage(normalizedPage);
       setGroupsTotalPages(
         safeTotalPages,
       );
