@@ -49,6 +49,76 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 - Confirm transfers ("Mark paid") with backend persistence
 - Ledger explanation with member selector dropdown and contribution details
 
+## Implementation evidence (audit map)
+
+The sections below map each major UI capability to the exact screen/component where it is implemented.
+
+### Home page (`src/app/page.tsx`)
+
+- Group pagination:
+  - Numbered page buttons + Previous/Next
+  - Page size selector (`5, 10, 25, 50, 100`)
+  - Active/current page highlighted
+  - Query params sent: `page`, `pageSize`
+- Group sorting:
+  - Column-side sort buttons (`▲`/`▼`) for:
+    - Name (`name,asc` / `name,desc`)
+    - Members (`memberCount,asc` / `memberCount,desc`)
+  - Query param sent: `sort`
+- Group filtering:
+  - Name filter input with Apply/Clear
+  - Supports wildcard patterns:
+    - `*` matches any sequence
+    - `?` matches one character
+  - Query param sent: `name`
+  - Fallback current-page filter still applied client-side if backend ignores filter
+- Members column:
+  - Uses `memberCount` from API response (`GroupResponse`)
+
+### Group page (`src/app/groups/[groupId]/page.tsx`)
+
+- Expenses list:
+  - Numbered pagination + Previous/Next
+  - Page size selector (`5, 10, 25, 50, 100`)
+  - Sort controls (`Date ▲/▼`, `Amount ▲/▼`)
+  - Query params sent: `page`, `size`, `sort`
+- Confirmed transfers list:
+  - Numbered pagination + Previous/Next
+  - Page size selector (`5, 10, 25, 50, 100`)
+  - Sort controls (`Date ▲/▼`, `Amount ▲/▼`)
+  - Optional confirmation filter input
+  - Query params sent: `confirmationId`, `page`, `size`, `sort`
+- Expense events list:
+  - Numbered pagination + Previous/Next
+  - Page size selector (`5, 10, 25, 50, 100`)
+  - Sort controls (`Date ▲/▼`)
+  - Query params sent: `page`, `size`, `sort`
+- Ledger explanation UI:
+  - Loads from `/groups/{groupId}/explanations/ledger`
+  - Member dropdown (`Select group member`)
+  - Renders selected member details only
+  - Supports response shape with top-level `explanations` and `contributions`
+
+## Quick verification checklist
+
+Use this checklist to verify implementation end-to-end in a running app:
+
+1. Home page group list:
+   - Change page size to `5` and confirm request includes `pageSize=5`.
+   - Click page `2` and confirm request page increments correctly.
+   - Click Name `▲`/`▼` and confirm `sort=name,asc|desc`.
+   - Apply wildcard filter (e.g., `6*`) and confirm `name=6*` is sent.
+2. Group page expenses:
+   - Change page size and verify request uses `size=<selected>`.
+   - Click Amount `▲`/`▼` and verify `sort=amount,asc|desc`.
+3. Group page confirmed transfers:
+   - Set confirmation filter + page change and verify both `confirmationId` and pagination params are sent.
+4. Group page events:
+   - Click Date `▲`/`▼` and verify `sort=createdAt,asc|desc`.
+5. Ledger explanation:
+   - Reload group page and confirm explanation section loads.
+   - Select a member and confirm only that member's explanation is shown.
+
 ## API expectations
 
 The frontend expects the following backend endpoints (base URL from `NEXT_PUBLIC_API_BASE_URL`):
