@@ -154,6 +154,7 @@ export default function HomePage() {
   const [groupsPage, setGroupsPage] = useState(1);
   const [groupsTotalPages, setGroupsTotalPages] = useState(1);
   const [groupsTotalItems, setGroupsTotalItems] = useState(0);
+  const [groupsSort, setGroupsSort] = useState("id,desc");
   const [serverFilterApplied, setServerFilterApplied] = useState(true);
   const [loading, setLoading] = useState(false);
   const [loadingGroups, setLoadingGroups] = useState(true);
@@ -225,6 +226,7 @@ export default function HomePage() {
       page = 1,
       nameFilter = groupFilterApplied,
       pageSize = groupsPageSize,
+      sort = groupsSort,
     ) => {
     setGroupsError(null);
     setLoadingGroups(true);
@@ -232,6 +234,7 @@ export default function HomePage() {
       const query = new URLSearchParams({
         page: String(page),
         pageSize: String(pageSize),
+        sort,
       });
       if (nameFilter.trim()) query.set("name", nameFilter.trim());
       const res = await api<PaginatedResponse<Group>>(`/groups?${query.toString()}`);
@@ -265,7 +268,7 @@ export default function HomePage() {
     } finally {
       setLoadingGroups(false);
     }
-  }, [groupFilterApplied, groupsPageSize]);
+  }, [groupFilterApplied, groupsPageSize, groupsSort]);
 
   const filteredGroups = useMemo(() => {
     const normalized = groupFilterApplied.trim();
@@ -281,7 +284,7 @@ export default function HomePage() {
 
   useEffect(() => {
     void loadGroups(1, groupFilterApplied);
-  }, [groupFilterApplied, groupsPageSize, loadGroups]);
+  }, [groupFilterApplied, groupsPageSize, groupsSort, loadGroups]);
 
   async function loadStatus() {
     setLoadingStatus(true);
@@ -458,6 +461,20 @@ export default function HomePage() {
           >
             Clear
           </button>
+          <select
+            className="rounded-xl border px-3 py-2 text-sm"
+            value={groupsSort}
+            onChange={(e) => setGroupsSort(e.target.value)}
+            disabled={loadingGroups}
+            aria-label="Sort groups"
+          >
+            <option value="id,desc">Newest first</option>
+            <option value="id,asc">Oldest first</option>
+            <option value="name,asc">Name A-Z</option>
+            <option value="name,desc">Name Z-A</option>
+            <option value="memberCount,desc">Most members</option>
+            <option value="memberCount,asc">Fewest members</option>
+          </select>
         </div>
 
         {loadingGroups && (

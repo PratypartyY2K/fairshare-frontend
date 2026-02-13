@@ -222,6 +222,7 @@ function PaginationControls({
 
 export default function GroupPage() {
   const defaultPageSize = 10;
+  const defaultListSort = "createdAt,desc";
   const pathname = usePathname();
   const groupId = useMemo(() => {
     if (!pathname) return NaN;
@@ -245,6 +246,7 @@ export default function GroupPage() {
   const [expensesPageSize, setExpensesPageSize] = useState(defaultPageSize);
   const [expensesTotalPages, setExpensesTotalPages] = useState(1);
   const [expensesTotalItems, setExpensesTotalItems] = useState(0);
+  const [expensesSort, setExpensesSort] = useState(defaultListSort);
   const [desc, setDesc] = useState("");
   const [amount, setAmount] = useState<string>("");
   const [paidByUserId, setPaidByUserId] = useState<number | "">("");
@@ -314,6 +316,7 @@ export default function GroupPage() {
   const [eventsPageSize, setEventsPageSize] = useState(defaultPageSize);
   const [eventsTotalPages, setEventsTotalPages] = useState(1);
   const [eventsTotalItems, setEventsTotalItems] = useState(0);
+  const [eventsSort, setEventsSort] = useState(defaultListSort);
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [eventsError, setEventsError] = useState<string | null>(null);
 
@@ -327,6 +330,8 @@ export default function GroupPage() {
     useState(1);
   const [confirmedTransfersTotalItems, setConfirmedTransfersTotalItems] =
     useState(0);
+  const [confirmedTransfersSort, setConfirmedTransfersSort] =
+    useState(defaultListSort);
   const [loadingConfirmedTransfers, setLoadingConfirmedTransfers] =
     useState(false);
   const [confirmedTransfersError, setConfirmedTransfersError] =
@@ -952,7 +957,7 @@ export default function GroupPage() {
     setLoadingConfirmedTransfers(true);
     setConfirmedTransfersError(null);
     void api<PaginatedResponse<ConfirmedTransfer>>(
-      `/groups/${groupId}/confirmed-transfers?page=1&pageSize=${defaultPageSize}`,
+      `/groups/${groupId}/confirmed-transfers?page=1&size=${defaultPageSize}&sort=${encodeURIComponent(defaultListSort)}`,
     )
       .then((res) => {
         setConfirmedTransfers(res.items ?? []);
@@ -1051,13 +1056,15 @@ export default function GroupPage() {
     gid: number,
     page = expensesPage,
     pageSize = expensesPageSize,
+    sort = expensesSort,
   ) {
     setLoadingExpenses(true);
     setExpensesError(null);
     try {
       const query = new URLSearchParams({
         page: String(page),
-        pageSize: String(pageSize),
+        size: String(pageSize),
+        sort,
       });
       const res = await api<PaginatedResponse<Expense>>(
         `/groups/${gid}/expenses?${query.toString()}`,
@@ -1146,13 +1153,19 @@ export default function GroupPage() {
     }
   }
 
-  async function loadEvents(gid: number, page = eventsPage, pageSize = eventsPageSize) {
+  async function loadEvents(
+    gid: number,
+    page = eventsPage,
+    pageSize = eventsPageSize,
+    sort = eventsSort,
+  ) {
     setLoadingEvents(true);
     setEventsError(null);
     try {
       const query = new URLSearchParams({
         page: String(page),
-        pageSize: String(pageSize),
+        size: String(pageSize),
+        sort,
       });
       const res = await api<PaginatedResponse<EventResponse>>(
         `/groups/${gid}/events?${query.toString()}`,
@@ -1186,13 +1199,15 @@ export default function GroupPage() {
     gid: number,
     page = confirmedTransfersPage,
     pageSize = confirmedTransfersPageSize,
+    sort = confirmedTransfersSort,
   ) {
     setLoadingConfirmedTransfers(true);
     setConfirmedTransfersError(null);
     try {
       const query = new URLSearchParams({
         page: String(page),
-        pageSize: String(pageSize),
+        size: String(pageSize),
+        sort,
       });
       if (confirmedFilter.trim()) {
         query.set("confirmationId", confirmedFilter.trim());
@@ -1885,9 +1900,29 @@ export default function GroupPage() {
       </div>
 
       <div className={cardClassName}>
-        <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-          Expenses
-        </h2>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+            Expenses
+          </h2>
+          <select
+            className="rounded-xl border border-slate-300 bg-white px-2 py-1 text-xs"
+            value={expensesSort}
+            onChange={(e) => {
+              const nextSort = e.target.value;
+              setExpensesSort(nextSort);
+              if (Number.isFinite(groupId)) {
+                void loadExpenses(groupId, 1, expensesPageSize, nextSort);
+              }
+            }}
+            disabled={loadingExpenses}
+            aria-label="Sort expenses"
+          >
+            <option value="createdAt,desc">Newest first</option>
+            <option value="createdAt,asc">Oldest first</option>
+            <option value="amount,desc">Amount high-low</option>
+            <option value="amount,asc">Amount low-high</option>
+          </select>
+        </div>
 
         {loadingExpenses && (
           <StatusBanner variant="loading" message="Loading expenses..." />
@@ -2909,16 +2944,41 @@ export default function GroupPage() {
           <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
             Confirmed transfers
           </h2>
-          <button
-            className="text-xs font-medium text-slate-600 underline"
-            onClick={() =>
-              Number.isFinite(groupId) &&
-              loadConfirmedTransfers(groupId, confirmedTransfersPage)
-            }
-            disabled={loadingConfirmedTransfers}
-          >
-            {loadingConfirmedTransfers ? "Refreshing..." : "Refresh"}
-          </button>
+          <div className="flex items-center gap-2">
+            <select
+              className="rounded-xl border border-slate-300 bg-white px-2 py-1 text-xs"
+              value={confirmedTransfersSort}
+              onChange={(e) => {
+                const nextSort = e.target.value;
+                setConfirmedTransfersSort(nextSort);
+                if (Number.isFinite(groupId)) {
+                  void loadConfirmedTransfers(
+                    groupId,
+                    1,
+                    confirmedTransfersPageSize,
+                    nextSort,
+                  );
+                }
+              }}
+              disabled={loadingConfirmedTransfers}
+              aria-label="Sort confirmed transfers"
+            >
+              <option value="createdAt,desc">Newest first</option>
+              <option value="createdAt,asc">Oldest first</option>
+              <option value="amount,desc">Amount high-low</option>
+              <option value="amount,asc">Amount low-high</option>
+            </select>
+            <button
+              className="text-xs font-medium text-slate-600 underline"
+              onClick={() =>
+                Number.isFinite(groupId) &&
+                loadConfirmedTransfers(groupId, confirmedTransfersPage)
+              }
+              disabled={loadingConfirmedTransfers}
+            >
+              {loadingConfirmedTransfers ? "Refreshing..." : "Refresh"}
+            </button>
+          </div>
         </div>
 
         <input
@@ -3041,15 +3101,33 @@ export default function GroupPage() {
           <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
             Expense events
           </h2>
-          <button
-            className="text-xs font-medium text-slate-600 underline"
-            onClick={() =>
-              Number.isFinite(groupId) && loadEvents(groupId, eventsPage)
-            }
-            disabled={loadingEvents}
-          >
-            {loadingEvents ? "Refreshing..." : "Refresh"}
-          </button>
+          <div className="flex items-center gap-2">
+            <select
+              className="rounded-xl border border-slate-300 bg-white px-2 py-1 text-xs"
+              value={eventsSort}
+              onChange={(e) => {
+                const nextSort = e.target.value;
+                setEventsSort(nextSort);
+                if (Number.isFinite(groupId)) {
+                  void loadEvents(groupId, 1, eventsPageSize, nextSort);
+                }
+              }}
+              disabled={loadingEvents}
+              aria-label="Sort events"
+            >
+              <option value="createdAt,desc">Newest first</option>
+              <option value="createdAt,asc">Oldest first</option>
+            </select>
+            <button
+              className="text-xs font-medium text-slate-600 underline"
+              onClick={() =>
+                Number.isFinite(groupId) && loadEvents(groupId, eventsPage)
+              }
+              disabled={loadingEvents}
+            >
+              {loadingEvents ? "Refreshing..." : "Refresh"}
+            </button>
+          </div>
         </div>
 
         {loadingEvents && (
