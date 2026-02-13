@@ -29,13 +29,25 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 ## Features
 
 - Create groups and rename them
+- Group list filtering by name (supports wildcard `*` and `?`)
+- Group list pagination with:
+  - page buttons (`1, 2, 3, ...`)
+  - Previous/Next
+  - page-size selector (`5, 10, 25, 50, 100`)
+  - per-column sort buttons (`▲`/`▼`) for Name and Members
 - Add members to a group
 - Add expenses with split modes:
   - Equal split
   - Exact amounts
   - Percentages
 - View expenses and settle-up transfers
+- Group detail lists (Expenses, Confirmed transfers, Expense events) support:
+  - page buttons (`1, 2, 3, ...`)
+  - Previous/Next
+  - page-size selector (`5, 10, 25, 50, 100`)
+  - sort buttons (`▲`/`▼`) by relevant columns
 - Confirm transfers ("Mark paid") with backend persistence
+- Ledger explanation with member selector dropdown and contribution details
 
 ## API expectations
 
@@ -43,7 +55,8 @@ The frontend expects the following backend endpoints (base URL from `NEXT_PUBLIC
 
 ### Groups
 
-- `GET /groups` -> `{ items: [{ id, name? }], totalItems, totalPages, currentPage, pageSize }`
+- `GET /groups` (query params used by UI: `page`, `pageSize`, `sort`, `name`)
+  -> `{ items: [{ id, name?, memberCount? }], totalItems, totalPages, currentPage, pageSize }`
 - `POST /groups` expects `{ name }` -> `{ id, name? }`
 - `GET /groups/{groupId}` -> `{ id, name?, members: [{ id, name? }] }`
 - `PATCH /groups/{groupId}` -> `{ id, name?, members: [...] }`
@@ -54,7 +67,8 @@ The frontend expects the following backend endpoints (base URL from `NEXT_PUBLIC
 
 ### Expenses
 
-- `GET /groups/{groupId}/expenses` -> `{ items: [{ expenseId, groupId, description, amount, payerUserId, createdAt, splits: [{ userId, shareAmount }] }], totalItems, totalPages, currentPage, pageSize }`
+- `GET /groups/{groupId}/expenses` (query params used by UI: `page`, `size`, `sort`)
+  -> `{ items: [{ expenseId, groupId, description, amount, payerUserId, createdAt, splits: [{ userId, shareAmount }] }], totalItems, totalPages, currentPage, pageSize }`
 - `POST /groups/{groupId}/expenses` expects:
   ```json
   {
@@ -90,8 +104,9 @@ The frontend expects the following backend endpoints (base URL from `NEXT_PUBLIC
 ### Ledger and analytics
 
 - `GET /groups/{groupId}/ledger` -> `{ entries: [{ userId, netBalance }] }`
-- `GET /groups/{groupId}/events` -> `{ items: [{ eventId, groupId, expenseId, eventType, payload, createdAt }], totalItems, totalPages, currentPage, pageSize }`
-- `GET /groups/{groupId}/confirmed-transfers?confirmationId=...` -> `{ items: [{ id, groupId, fromUserId, toUserId, amount, confirmationId, createdAt }], totalItems, totalPages, currentPage, pageSize }`
+- `GET /groups/{groupId}/explanations/ledger` -> `{ explanations: [{ userId, netBalance, contributions: [...] }] }` (also supports compatible wrapped/legacy shapes)
+- `GET /groups/{groupId}/events` (query params used by UI: `page`, `size`, `sort`) -> `{ items: [{ eventId, groupId, expenseId, eventType, payload, createdAt }], totalItems, totalPages, currentPage, pageSize }`
+- `GET /groups/{groupId}/confirmed-transfers` (query params used by UI: `confirmationId`, `page`, `size`, `sort`) -> `{ items: [{ id, groupId, fromUserId, toUserId, amount, confirmationId, createdAt }], totalItems, totalPages, currentPage, pageSize }`
 - `GET /groups/{groupId}/owes?fromUserId=...&toUserId=...` -> `{ amount }`
 - `GET /groups/{groupId}/owes/historical?fromUserId=...&toUserId=...` -> `{ amount }`
 
@@ -103,6 +118,7 @@ The frontend expects the following backend endpoints (base URL from `NEXT_PUBLIC
 ## Notes
 
 - The UI is optimized for simple workflows and uses client-side data fetching.
+- UI page numbers are 1-based. Backend `currentPage` from Spring-style pageable responses is treated as 0-based and mapped in the frontend.
 - If your backend response shape differs, update the types in the page components.
 
 ## Deploy on Vercel
