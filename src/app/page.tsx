@@ -574,9 +574,7 @@ export default function HomePage() {
                   className="rounded-xl border px-2 py-1"
                   value={groupsPageSize}
                   onChange={(e) => {
-                    const nextSize = Number(e.target.value);
-                    setGroupsPageSize(nextSize);
-                    void loadGroups(1, groupFilterApplied, nextSize);
+                    setGroupsPageSize(Number(e.target.value));
                   }}
                   disabled={loadingGroups}
                 >
