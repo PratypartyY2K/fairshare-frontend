@@ -42,6 +42,52 @@ type LedgerEntry = {
   netBalance: string;
 };
 
+type LedgerExplanationTransfer = {
+  transferId?: number;
+  fromUserId: number;
+  toUserId: number;
+  amount: string;
+  createdAt?: string;
+};
+
+type LedgerExplanationExpense = {
+  expenseId?: number;
+  description?: string;
+  amount?: string;
+  payerUserId?: number;
+  createdAt?: string;
+  splits?: Split[];
+};
+
+type LedgerExplanationEntry = {
+  userId: number;
+  netBalance?: string;
+  expenses?: LedgerExplanationExpense[];
+  contributingExpenses?: LedgerExplanationExpense[];
+  transfers?: LedgerExplanationTransfer[];
+  contributingTransfers?: LedgerExplanationTransfer[];
+  transfersIn?: LedgerExplanationTransfer[];
+  transfersOut?: LedgerExplanationTransfer[];
+  contributions?: Array<{
+    type?: string;
+    amount?: string;
+    description?: string;
+    timestamp?: string;
+    referenceId?: number;
+  }>;
+};
+
+type LedgerExplanationResponse = {
+  entries?: LedgerExplanationEntry[];
+  users?: LedgerExplanationEntry[];
+  items?: LedgerExplanationEntry[];
+  explanations?: LedgerExplanationEntry[];
+  data?: LedgerExplanationResponse | LedgerExplanationEntry[];
+  result?: LedgerExplanationResponse | LedgerExplanationEntry[];
+  payload?: LedgerExplanationResponse | LedgerExplanationEntry[];
+  [key: string]: unknown;
+};
+
 type EventResponse = {
   eventId: number;
   groupId: number;
@@ -137,7 +183,6 @@ export default function GroupPage() {
   const [exactAmounts, setExactAmounts] = useState<Record<number, string>>({});
   const [percentages, setPercentages] = useState<Record<number, string>>({});
   const [shares, setShares] = useState<Record<number, string>>({});
-  const [idempotencyKey, setIdempotencyKey] = useState("");
 
   const [settlements, setSettlements] = useState<SettlementTransfer[]>([]);
   const [addingExpense, setAddingExpense] = useState(false);
@@ -184,6 +229,14 @@ export default function GroupPage() {
   const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([]);
   const [loadingLedger, setLoadingLedger] = useState(false);
   const [ledgerError, setLedgerError] = useState<string | null>(null);
+  const [ledgerExplanation, setLedgerExplanation] =
+    useState<LedgerExplanationResponse | null>(null);
+  const [loadingLedgerExplanation, setLoadingLedgerExplanation] =
+    useState(false);
+  const [ledgerExplanationError, setLedgerExplanationError] =
+    useState<string | null>(null);
+  const [selectedLedgerExplanationUserId, setSelectedLedgerExplanationUserId] =
+    useState<number | "">("");
 
   const [events, setEvents] = useState<EventResponse[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(false);
@@ -204,6 +257,9 @@ export default function GroupPage() {
   const [owesHistoricalAmount, setOwesHistoricalAmount] = useState<
     number | null
   >(null);
+  const [owesView, setOwesView] = useState<"current" | "historical" | null>(
+    null,
+  );
   const [loadingOwes, setLoadingOwes] = useState(false);
   const [owesError, setOwesError] = useState<string | null>(null);
 
@@ -222,6 +278,445 @@ export default function GroupPage() {
 
   function formatAmount(value: number) {
     return value.toFixed(2);
+  }
+
+  function formatMoney(value?: string | number) {
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) return `$${numeric.toFixed(2)}`;
+    if (value === undefined || value === null || value === "") return "—";
+    return `$${value}`;
+  }
+
+  function formatEventFieldLabel(key: string) {
+    const normalized = key
+      .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+      .replace(/_/g, " ")
+      .trim();
+    if (!normalized) return "Details";
+    return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+  }
+
+  function isRecord(value: unknown): value is Record<string, unknown> {
+    return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+  }
+
+  function parseJsonRecord(value: unknown): Record<string, unknown> | null {
+    if (isRecord(value)) return value;
+    if (typeof value !== "string") return null;
+    try {
+      const parsed = JSON.parse(value);
+      return isRecord(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function stripExpenseIds(value: unknown): unknown {
+    if (Array.isArray(value)) return value.map(stripExpenseIds);
+    if (isRecord(value)) {
+      return Object.fromEntries(
+        Object.entries(value)
+          .filter(([key]) => key !== "expenseId")
+          .map(([key, nested]) => [key, stripExpenseIds(nested)]),
+      );
+    }
+    return value;
+  }
+
+  function formatUserById(value: string | number) {
+    const numeric =
+      typeof value === "number" ? value : Number.parseInt(String(value), 10);
+    if (!Number.isFinite(numeric)) return String(value);
+    const member = members.find((m) => m.id === numeric);
+    return member ? getMemberName(member) : `User #${numeric}`;
+  }
+
+  function formatEventFieldValue(key: string, value: unknown) {
+    if (value === undefined || value === null) return "—";
+    const lowerKey = key.toLowerCase();
+
+    if (lowerKey.includes("amount")) {
+      if (typeof value === "number" || typeof value === "string") {
+        return formatMoney(value);
+      }
+    }
+
+    if (lowerKey.endsWith("userid")) {
+      if (typeof value === "number" || typeof value === "string") {
+        return formatUserById(value);
+      }
+    }
+
+    if (lowerKey.endsWith("userids") && Array.isArray(value)) {
+      return value
+        .map((item) =>
+          typeof item === "number" || typeof item === "string"
+            ? formatUserById(item)
+            : String(item),
+        )
+        .join(", ");
+    }
+
+    if (typeof value === "object") {
+      return JSON.stringify(stripExpenseIds(value));
+    }
+
+    return String(value);
+  }
+
+  function areEventValuesEqual(left: unknown, right: unknown) {
+    return (
+      JSON.stringify(stripExpenseIds(left)) ===
+      JSON.stringify(stripExpenseIds(right))
+    );
+  }
+
+  function formatSignedMoney(value: number) {
+    const abs = Math.abs(value);
+    return `${value >= 0 ? "+" : "-"}$${abs.toFixed(2)}`;
+  }
+
+  function getUserOwesLabel(value: number) {
+    if (Math.abs(value) < 0.005) return "settled";
+    if (value > 0) return `owes ${formatMoney(value)}`;
+    return `is owed ${formatMoney(Math.abs(value))}`;
+  }
+
+  function getSplitUserId(split: unknown): number | null {
+    if (!isRecord(split)) return null;
+    const raw = split.userId ?? split.user_id ?? split.memberId ?? split.member_id;
+    const id = Number(raw);
+    return Number.isFinite(id) ? id : null;
+  }
+
+  function getSplitAmountValue(split: unknown): number | null {
+    if (!isRecord(split)) return null;
+    const raw =
+      split.shareAmount ??
+      split.share_amount ??
+      split.amount ??
+      split.value ??
+      split.share;
+    const amount = Number(raw);
+    return Number.isFinite(amount) ? amount : null;
+  }
+
+  function getExpenseOwesByUser(value: unknown): Map<number, number> | null {
+    if (!isRecord(value)) return null;
+
+    const payerUserId = Number(value.payerUserId);
+    const amount = Number(value.amount);
+    if (!Number.isFinite(payerUserId) || !Number.isFinite(amount)) return null;
+
+    const shareByUser = getSplitSharesByUser(value);
+    if (!shareByUser || shareByUser.size === 0) return null;
+
+    const owesByUser = new Map<number, number>();
+    owesByUser.set(payerUserId, -amount);
+
+    for (const [splitUserId, splitAmount] of shareByUser.entries()) {
+      owesByUser.set(splitUserId, (owesByUser.get(splitUserId) ?? 0) + splitAmount);
+    }
+
+    return owesByUser;
+  }
+
+  function getOwesDiffLines(beforeValue: unknown, afterValue: unknown) {
+    const beforeOwes = getExpenseOwesByUser(beforeValue);
+    const afterOwes = getExpenseOwesByUser(afterValue);
+    if (!beforeOwes || !afterOwes) return [] as string[];
+
+    const allUserIds = Array.from(
+      new Set([...beforeOwes.keys(), ...afterOwes.keys()]),
+    ).sort((a, b) => a - b);
+
+    const lines = allUserIds
+      .map((userId) => {
+        const before = beforeOwes.get(userId) ?? 0;
+        const after = afterOwes.get(userId) ?? 0;
+        if (Math.abs(before - after) < 0.005) return null;
+
+        const member = members.find((m) => m.id === userId);
+        const label = member ? getMemberName(member) : `User #${userId}`;
+        const delta = after - before;
+        return `${label}: ${getUserOwesLabel(before)} -> ${getUserOwesLabel(after)} (delta ${formatSignedMoney(delta)})`;
+      })
+      .filter((line): line is string => Boolean(line));
+
+    return lines;
+  }
+
+  function getSplitSharesByUser(value: unknown): Map<number, number> | null {
+    if (!isRecord(value)) return null;
+
+    const sharesByUser = new Map<number, number>();
+
+    if (Array.isArray(value.splits)) {
+      for (const split of value.splits) {
+        const userId = getSplitUserId(split);
+        const shareAmount = getSplitAmountValue(split);
+        if (userId === null || shareAmount === null) continue;
+        sharesByUser.set(userId, shareAmount);
+      }
+      if (sharesByUser.size > 0) return sharesByUser;
+    }
+
+    const participantUserIds = Array.isArray(value.participantUserIds)
+      ? value.participantUserIds
+          .map((id) => Number(id))
+          .filter((id) => Number.isFinite(id))
+      : [];
+
+    if (
+      Array.isArray(value.exactAmounts) &&
+      participantUserIds.length === value.exactAmounts.length
+    ) {
+      value.exactAmounts.forEach((amount, index) => {
+        const userId = participantUserIds[index];
+        const shareAmount = Number(amount);
+        if (Number.isFinite(userId) && Number.isFinite(shareAmount)) {
+          sharesByUser.set(userId, shareAmount);
+        }
+      });
+      if (sharesByUser.size > 0) return sharesByUser;
+    }
+
+    const totalAmount = Number(value.amount);
+    if (
+      Number.isFinite(totalAmount) &&
+      Array.isArray(value.percentages) &&
+      participantUserIds.length === value.percentages.length
+    ) {
+      value.percentages.forEach((percentage, index) => {
+        const userId = participantUserIds[index];
+        const pct = Number(percentage);
+        if (Number.isFinite(userId) && Number.isFinite(pct)) {
+          sharesByUser.set(userId, (totalAmount * pct) / 100);
+        }
+      });
+      if (sharesByUser.size > 0) return sharesByUser;
+    }
+
+    if (
+      Number.isFinite(totalAmount) &&
+      Array.isArray(value.shares) &&
+      participantUserIds.length === value.shares.length
+    ) {
+      const shareCounts = value.shares.map((count) => Number(count));
+      const totalShares = shareCounts.reduce(
+        (sum, count) => sum + (Number.isFinite(count) ? count : 0),
+        0,
+      );
+      if (totalShares > 0) {
+        shareCounts.forEach((count, index) => {
+          const userId = participantUserIds[index];
+          if (Number.isFinite(userId) && Number.isFinite(count)) {
+            sharesByUser.set(userId, (totalAmount * count) / totalShares);
+          }
+        });
+        if (sharesByUser.size > 0) return sharesByUser;
+      }
+    }
+
+    const splitByUser = value.splitByUserId ?? value.sharesByUserId;
+    if (isRecord(splitByUser)) {
+      for (const [rawUserId, rawAmount] of Object.entries(splitByUser)) {
+        const userId = Number(rawUserId);
+        const shareAmount = Number(rawAmount);
+        if (Number.isFinite(userId) && Number.isFinite(shareAmount)) {
+          sharesByUser.set(userId, shareAmount);
+        }
+      }
+      if (sharesByUser.size > 0) return sharesByUser;
+    }
+
+    return null;
+  }
+
+  function getSplitDiffLines(beforeValue: unknown, afterValue: unknown) {
+    const beforeShares = getSplitSharesByUser(beforeValue);
+    const afterShares = getSplitSharesByUser(afterValue);
+    if (!beforeShares || !afterShares) return [] as string[];
+
+    const allUserIds = Array.from(
+      new Set([...beforeShares.keys(), ...afterShares.keys()]),
+    ).sort((a, b) => a - b);
+
+    return allUserIds
+      .map((userId) => {
+        const before = beforeShares.get(userId) ?? 0;
+        const after = afterShares.get(userId) ?? 0;
+        if (Math.abs(before - after) < 0.005) return null;
+
+        const member = members.find((m) => m.id === userId);
+        const label = member ? getMemberName(member) : `User #${userId}`;
+        const delta = after - before;
+        return `${label}: ${formatMoney(before)} -> ${formatMoney(after)} (delta ${formatSignedMoney(delta)})`;
+      })
+      .filter((line): line is string => Boolean(line));
+  }
+
+  function buildEventDiffLines(
+    beforeValue: unknown,
+    afterValue: unknown,
+    path: string[] = [],
+  ): string[] {
+    if (isRecord(beforeValue) && isRecord(afterValue)) {
+      const keys = Array.from(
+        new Set([...Object.keys(beforeValue), ...Object.keys(afterValue)]),
+      ).filter((key) => key !== "expenseId");
+
+      return keys.flatMap((key) =>
+        buildEventDiffLines(beforeValue[key], afterValue[key], [...path, key]),
+      );
+    }
+
+    if (areEventValuesEqual(beforeValue, afterValue)) return [];
+    const label =
+      path.length > 0
+        ? path.map((segment) => formatEventFieldLabel(segment)).join(" ")
+        : "Value";
+    const leafKey = path[path.length - 1] ?? "value";
+    return [
+      `${label}: ${formatEventFieldValue(leafKey, beforeValue)} -> ${formatEventFieldValue(leafKey, afterValue)}`,
+    ];
+  }
+
+  function formatEventPayload(payload: string) {
+    try {
+      const parsed = JSON.parse(payload) as Record<string, unknown>;
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return payload;
+      }
+
+      const beforeValue = parseJsonRecord(parsed.before ?? parsed.Before);
+      const afterValue = parseJsonRecord(parsed.after ?? parsed.After);
+      if (isRecord(beforeValue) && isRecord(afterValue)) {
+        const diffLines = buildEventDiffLines(beforeValue, afterValue);
+        const splitDiffLines = getSplitDiffLines(beforeValue, afterValue);
+        const owesDiffLines = getOwesDiffLines(beforeValue, afterValue);
+        if (
+          diffLines.length === 0 &&
+          splitDiffLines.length === 0 &&
+          owesDiffLines.length === 0
+        ) {
+          return "No dispute-impacting changes found.";
+        }
+
+        const sections: string[] = [];
+        if (splitDiffLines.length > 0) {
+          sections.push("Split changes per person:");
+          sections.push(...splitDiffLines);
+        }
+        if (owesDiffLines.length > 0) {
+          sections.push("Owes changes:");
+          sections.push(...owesDiffLines);
+        }
+        if (diffLines.length > 0) {
+          sections.push("Field changes:");
+          sections.push(...diffLines);
+        }
+
+        return sections.join("\n");
+      }
+
+      const lines = Object.entries(parsed)
+        .filter(([key]) => key !== "expenseId")
+        .flatMap(([key, value]) => {
+          const label = formatEventFieldLabel(key);
+          if (isRecord(value)) {
+            const nestedEntries = Object.entries(
+              stripExpenseIds(value) as Record<string, unknown>,
+            );
+            if (nestedEntries.length === 0) return `${label}: —`;
+            return nestedEntries.map(([nestedKey, nestedValue]) => {
+              const nestedLabel = formatEventFieldLabel(nestedKey);
+              return `${label} ${nestedLabel}: ${formatEventFieldValue(
+                nestedKey,
+                nestedValue,
+              )}`;
+            });
+          }
+          return `${label}: ${formatEventFieldValue(key, value)}`;
+        });
+
+      return lines.length > 0 ? lines.join("\n") : "No additional details";
+    } catch {
+      return payload;
+    }
+  }
+
+  function getShortTimeZoneLabel(dateInput: string) {
+    const date = new Date(dateInput);
+    const part = new Intl.DateTimeFormat("en-US", {
+      timeZoneName: "short",
+    })
+      .formatToParts(date)
+      .find((p) => p.type === "timeZoneName");
+    return part?.value ?? "Local";
+  }
+
+  function getLedgerExplanationEntries(
+    explanation: LedgerExplanationResponse | null,
+  ) {
+    if (!explanation) return [];
+
+    const candidates = [
+      explanation.entries,
+      explanation.users,
+      explanation.items,
+      explanation.explanations,
+      Array.isArray(explanation.data) ? explanation.data : undefined,
+      Array.isArray(explanation.result) ? explanation.result : undefined,
+      Array.isArray(explanation.payload) ? explanation.payload : undefined,
+    ];
+    const directList = candidates.find((candidate) => Array.isArray(candidate));
+    if (Array.isArray(directList)) return directList;
+
+    const nested =
+      (explanation.data && !Array.isArray(explanation.data)
+        ? getLedgerExplanationEntries(explanation.data as LedgerExplanationResponse)
+        : []) ||
+      (explanation.result && !Array.isArray(explanation.result)
+        ? getLedgerExplanationEntries(explanation.result as LedgerExplanationResponse)
+        : []) ||
+      (explanation.payload && !Array.isArray(explanation.payload)
+        ? getLedgerExplanationEntries(explanation.payload as LedgerExplanationResponse)
+        : []);
+    if (Array.isArray(nested) && nested.length > 0) return nested;
+
+    // Support map-like responses: { "12": {...entry without userId...}, "34": {...} }
+    const mapped = Object.entries(explanation)
+      .filter(([key, value]) => {
+        if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+        return key !== "data" && key !== "result" && key !== "payload";
+      })
+      .map(([key, value]) => {
+        const entry = value as LedgerExplanationEntry;
+        const parsedUserId = Number(key);
+        return {
+          ...entry,
+          userId: Number.isFinite(entry.userId)
+            ? entry.userId
+            : Number.isFinite(parsedUserId)
+              ? parsedUserId
+              : -1,
+        } satisfies LedgerExplanationEntry;
+      })
+      .filter((entry) => entry.userId >= 0);
+    if (mapped.length > 0) return mapped;
+
+    return [];
+  }
+
+  function formatContributionDescription(description?: string) {
+    if (!description?.trim()) return "—";
+    return description.replace(/user\s+#?(\d+)/gi, (_, userIdText: string) => {
+      const userId = Number(userIdText);
+      if (!Number.isFinite(userId)) return `user ${userIdText}`;
+      const member = members.find((m) => m.id === userId);
+      return member ? getMemberName(member) : `User #${userId}`;
+    });
   }
 
   function getRemainingAmount(
@@ -345,7 +840,49 @@ export default function GroupPage() {
     loadGroup(groupId);
     loadExpenses(groupId);
     loadSettlements(groupId);
+    loadLedger(groupId);
     loadEvents(groupId);
+
+    setLoadingLedgerExplanation(true);
+    setLedgerExplanationError(null);
+    void api<LedgerExplanationResponse>(`/groups/${groupId}/explanations/ledger`)
+      .then((res) => {
+        setLedgerExplanation(res);
+        const entries =
+          res.entries ?? res.users ?? res.items ?? res.explanations ?? [];
+        setSelectedLedgerExplanationUserId((prev) => {
+          if (entries.length === 0) return "";
+          if (prev !== "" && entries.some((entry) => entry.userId === prev)) {
+            return prev;
+          }
+          return "";
+        });
+      })
+      .catch((e: unknown) => {
+        setLedgerExplanationError(
+          e instanceof Error ? e.message : "Failed to load ledger explanation",
+        );
+      })
+      .finally(() => {
+        setLoadingLedgerExplanation(false);
+      });
+
+    setLoadingConfirmedTransfers(true);
+    setConfirmedTransfersError(null);
+    void api<PaginatedResponse<ConfirmedTransfer>>(
+      `/groups/${groupId}/confirmed-transfers`,
+    )
+      .then((res) => {
+        setConfirmedTransfers(res.items ?? []);
+      })
+      .catch((e: unknown) => {
+        setConfirmedTransfersError(
+          e instanceof Error ? e.message : "Failed to load confirmed transfers",
+        );
+      })
+      .finally(() => {
+        setLoadingConfirmedTransfers(false);
+      });
   }, [groupId]);
 
   useEffect(() => {
@@ -356,6 +893,8 @@ export default function GroupPage() {
     setEditPercentages((prev) => buildMemberValueMap(members, prev));
     setEditShares((prev) => buildMemberValueMap(members, prev));
   }, [members]);
+
+  const ledgerExplanationEntries = getLedgerExplanationEntries(ledgerExplanation);
 
   async function addMember() {
     if (!Number.isFinite(groupId) || groupId <= 0) return;
@@ -462,6 +1001,31 @@ export default function GroupPage() {
     }
   }
 
+  async function loadLedgerExplanation(gid: number) {
+    setLoadingLedgerExplanation(true);
+    setLedgerExplanationError(null);
+    try {
+      const res = await api<LedgerExplanationResponse>(
+        `/groups/${gid}/explanations/ledger`,
+      );
+      setLedgerExplanation(res);
+      const entries = getLedgerExplanationEntries(res);
+      setSelectedLedgerExplanationUserId((prev) => {
+        if (entries.length === 0) return "";
+        if (prev !== "" && entries.some((entry) => entry.userId === prev)) {
+          return prev;
+        }
+        return "";
+      });
+    } catch (e: unknown) {
+      setLedgerExplanationError(
+        e instanceof Error ? e.message : "Failed to load ledger explanation",
+      );
+    } finally {
+      setLoadingLedgerExplanation(false);
+    }
+  }
+
   async function loadEvents(gid: number) {
     setLoadingEvents(true);
     setEventsError(null);
@@ -500,7 +1064,14 @@ export default function GroupPage() {
   }
 
   async function loadOwes(gid: number) {
-    if (owesFromUserId === "" || owesToUserId === "") return;
+    if (
+      owesFromUserId === "" ||
+      owesToUserId === "" ||
+      owesFromUserId === owesToUserId
+    ) {
+      return;
+    }
+    setOwesView("current");
     setLoadingOwes(true);
     setOwesError(null);
     try {
@@ -517,7 +1088,14 @@ export default function GroupPage() {
   }
 
   async function loadOwesHistorical(gid: number) {
-    if (owesFromUserId === "" || owesToUserId === "") return;
+    if (
+      owesFromUserId === "" ||
+      owesToUserId === "" ||
+      owesFromUserId === owesToUserId
+    ) {
+      return;
+    }
+    setOwesView("historical");
     setLoadingOwes(true);
     setOwesError(null);
     try {
@@ -623,7 +1201,6 @@ export default function GroupPage() {
 
       await api<void>(`/groups/${groupId}/expenses`, {
         method: "POST",
-        idempotencyKey: idempotencyKey.trim() || undefined,
         body: JSON.stringify(payload),
       });
 
@@ -634,7 +1211,6 @@ export default function GroupPage() {
       setPercentages({});
       setShares({});
       setSplitMode("equal");
-      setIdempotencyKey("");
 
       await Promise.all([
         loadExpenses(groupId),
@@ -967,13 +1543,6 @@ export default function GroupPage() {
             onChange={(e) => setDesc(e.target.value)}
           />
 
-          <input
-            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
-            placeholder="Idempotency key (optional)"
-            value={idempotencyKey}
-            onChange={(e) => setIdempotencyKey(e.target.value)}
-          />
-
           <div className="flex flex-col gap-2 sm:flex-row">
             <input
               className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none"
@@ -1254,7 +1823,7 @@ export default function GroupPage() {
       {editingExpenseId !== null && (
         <div className={cardClassName}>
           <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-            Update expense #{editingExpenseId}
+            Update expense
           </h2>
 
           <div className="mt-3 grid grid-cols-1 gap-3">
@@ -1676,6 +2245,358 @@ export default function GroupPage() {
       </div>
 
       <div className={cardClassName}>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+              Ledger explanation
+            </h2>
+            <p className="mt-1 text-xs text-slate-500">
+              See which expenses and transfers drive each member's balance.
+            </p>
+          </div>
+          <button
+            className="text-xs font-medium text-slate-600 underline"
+            onClick={() =>
+              Number.isFinite(groupId) && loadLedgerExplanation(groupId)
+            }
+            disabled={loadingLedgerExplanation}
+          >
+            {loadingLedgerExplanation ? "Explaining..." : "Explain"}
+          </button>
+        </div>
+
+        {loadingLedgerExplanation && (
+          <StatusBanner
+            variant="loading"
+            message="Loading ledger explanation..."
+          />
+        )}
+        {ledgerExplanationError && (
+          <StatusBanner
+            variant="error"
+            message={ledgerExplanationError}
+            onRetry={() =>
+              Number.isFinite(groupId) && loadLedgerExplanation(groupId)
+            }
+          />
+        )}
+        {!loadingLedgerExplanation && !ledgerExplanationError && (
+          <div className="mt-4">
+            <label className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+              Select group member
+            </label>
+            <select
+              className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+              value={selectedLedgerExplanationUserId}
+              onChange={(e) =>
+                setSelectedLedgerExplanationUserId(
+                  e.target.value ? Number(e.target.value) : "",
+                )
+              }
+            >
+              <option value="">Select group member</option>
+              {ledgerExplanationEntries.map((entry) => {
+                const member = members.find((m) => m.id === entry.userId);
+                const label = member
+                  ? getMemberName(member)
+                  : `User #${entry.userId}`;
+                return (
+                  <option key={entry.userId} value={entry.userId}>
+                    {label}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+        )}
+        {!loadingLedgerExplanation &&
+          !ledgerExplanationError &&
+          ledgerExplanationEntries.length === 0 && (
+            <StatusBanner
+              variant="empty"
+              message="No explanation data yet."
+            />
+          )}
+        {!loadingLedgerExplanation &&
+          !ledgerExplanationError &&
+          ledgerExplanationEntries.length > 0 &&
+          selectedLedgerExplanationUserId === "" && (
+            <StatusBanner
+              variant="info"
+              message="Select group member to view explanation."
+            />
+          )}
+        {!loadingLedgerExplanation &&
+          !ledgerExplanationError &&
+          ledgerExplanationEntries.length > 0 &&
+          selectedLedgerExplanationUserId !== "" && (
+            <div className="mt-4 space-y-4">
+              {ledgerExplanationEntries
+                .filter(
+                  (entry) =>
+                    entry.userId === selectedLedgerExplanationUserId,
+                )
+                .map((entry) => {
+                const member = members.find((m) => m.id === entry.userId);
+                const label = member
+                  ? getMemberName(member)
+                  : `User #${entry.userId}`;
+                const netValue = Number(entry.netBalance ?? "");
+                const netLabel = Number.isFinite(netValue)
+                  ? `${netValue >= 0 ? "+" : "-"}$${Math.abs(netValue).toFixed(
+                      2,
+                    )}`
+                  : entry.netBalance ?? "—";
+                const netClass = Number.isFinite(netValue)
+                  ? netValue >= 0
+                    ? "text-emerald-700"
+                    : "text-rose-700"
+                  : "text-slate-600";
+                const expenses =
+                  entry.expenses ?? entry.contributingExpenses ?? [];
+                const transfersIn = entry.transfersIn ?? [];
+                const transfersOut = entry.transfersOut ?? [];
+                const transfers =
+                  entry.transfers ?? entry.contributingTransfers ?? [];
+                const contributions = entry.contributions ?? [];
+                const showDirectionalTransfers =
+                  transfersIn.length > 0 || transfersOut.length > 0;
+
+                return (
+                  <div
+                    key={entry.userId}
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="font-medium text-slate-900">
+                          {label}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          Net balance
+                        </div>
+                      </div>
+                      <span className={netClass}>{netLabel}</span>
+                    </div>
+
+                    {expenses.length > 0 && (
+                      <div className="mt-3">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                          Expenses
+                        </div>
+                        <div className="mt-2 space-y-2">
+                          {expenses.map((expense) => {
+                            const payer = members.find(
+                              (m) => m.id === expense.payerUserId,
+                            );
+                            const payerLabel = payer
+                              ? getMemberName(payer)
+                              : expense.payerUserId
+                                ? `User #${expense.payerUserId}`
+                                : "Unknown payer";
+                            return (
+                              <div
+                                key={`${entry.userId}-${expense.expenseId ?? expense.description}`}
+                                className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2"
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <div>
+                                    <div className="font-medium text-slate-900">
+                                      {expense.description ?? "Expense"}
+                                    </div>
+                                    <div className="text-xs text-slate-500">
+                                      Paid by {payerLabel}
+                                    </div>
+                                  </div>
+                                  <span className="text-xs font-semibold text-slate-700">
+                                    {formatMoney(expense.amount)}
+                                  </span>
+                                </div>
+                                {expense.splits &&
+                                  expense.splits.length > 0 && (
+                                    <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-600">
+                                      {expense.splits.map((split) => {
+                                        const splitMember = members.find(
+                                          (m) => m.id === split.userId,
+                                        );
+                                        const splitLabel = splitMember
+                                          ? getMemberName(splitMember)
+                                          : `User #${split.userId}`;
+                                        return (
+                                          <span
+                                            key={`${entry.userId}-${expense.expenseId}-${split.userId}`}
+                                            className="rounded-full border border-slate-200 bg-white px-2 py-1"
+                                          >
+                                            {splitLabel}{" "}
+                                            {formatMoney(split.shareAmount)}
+                                          </span>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {(showDirectionalTransfers || transfers.length > 0) && (
+                      <div className="mt-3">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                          Transfers
+                        </div>
+                        {showDirectionalTransfers ? (
+                          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                            {transfersIn.length > 0 && (
+                              <div className="space-y-2">
+                                <div className="text-[11px] font-medium text-emerald-700">
+                                  Incoming
+                                </div>
+                                {transfersIn.map((transfer) => {
+                                  const fromMember = members.find(
+                                    (m) => m.id === transfer.fromUserId,
+                                  );
+                                  const fromLabel = fromMember
+                                    ? getMemberName(fromMember)
+                                    : `User #${transfer.fromUserId}`;
+                                  return (
+                                    <div
+                                      key={`${entry.userId}-in-${transfer.fromUserId}-${transfer.toUserId}-${transfer.amount}`}
+                                      className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2"
+                                    >
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className="text-xs text-slate-600">
+                                          {fromLabel} → {label}
+                                        </span>
+                                        <span className="text-xs font-semibold text-emerald-700">
+                                          {formatMoney(transfer.amount)}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                            {transfersOut.length > 0 && (
+                              <div className="space-y-2">
+                                <div className="text-[11px] font-medium text-rose-700">
+                                  Outgoing
+                                </div>
+                                {transfersOut.map((transfer) => {
+                                  const toMember = members.find(
+                                    (m) => m.id === transfer.toUserId,
+                                  );
+                                  const toLabel = toMember
+                                    ? getMemberName(toMember)
+                                    : `User #${transfer.toUserId}`;
+                                  return (
+                                    <div
+                                      key={`${entry.userId}-out-${transfer.fromUserId}-${transfer.toUserId}-${transfer.amount}`}
+                                      className="rounded-lg border border-rose-100 bg-rose-50 px-3 py-2"
+                                    >
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className="text-xs text-slate-600">
+                                          {label} → {toLabel}
+                                        </span>
+                                        <span className="text-xs font-semibold text-rose-700">
+                                          {formatMoney(transfer.amount)}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="mt-2 space-y-2">
+                            {transfers.map((transfer) => {
+                              const fromMember = members.find(
+                                (m) => m.id === transfer.fromUserId,
+                              );
+                              const toMember = members.find(
+                                (m) => m.id === transfer.toUserId,
+                              );
+                              const fromLabel = fromMember
+                                ? getMemberName(fromMember)
+                                : `User #${transfer.fromUserId}`;
+                              const toLabel = toMember
+                                ? getMemberName(toMember)
+                                : `User #${transfer.toUserId}`;
+                              return (
+                                <div
+                                  key={`${entry.userId}-${transfer.fromUserId}-${transfer.toUserId}-${transfer.amount}`}
+                                  className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2"
+                                >
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-xs text-slate-600">
+                                      {fromLabel} → {toLabel}
+                                    </span>
+                                    <span className="text-xs font-semibold text-slate-700">
+                                      {formatMoney(transfer.amount)}
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {contributions.length > 0 && (
+                      <div className="mt-3">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                          Contributions
+                        </div>
+                        <div className="mt-2 space-y-2">
+                          {contributions.map((contribution, index) => (
+                            <div
+                              key={`${entry.userId}-${contribution.referenceId ?? index}-${contribution.type ?? "contribution"}`}
+                              className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2"
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div>
+                                  <div className="text-xs font-medium text-slate-900">
+                                    {contribution.type
+                                      ? contribution.type
+                                          .toLowerCase()
+                                          .replace(/_/g, " ")
+                                          .replace(/\b\w/g, (c) =>
+                                            c.toUpperCase(),
+                                          )
+                                      : "Contribution"}
+                                  </div>
+                                  <div className="text-xs text-slate-600">
+                                    {formatContributionDescription(
+                                      contribution.description,
+                                    )}
+                                  </div>
+                                </div>
+                                <span className="text-xs font-semibold text-slate-700">
+                                  {formatMoney(contribution.amount)}
+                                </span>
+                              </div>
+                              {contribution.timestamp && (
+                                <div className="mt-1 text-[11px] text-slate-500">
+                                  {new Date(contribution.timestamp).toLocaleString()} (
+                                  {getShortTimeZoneLabel(contribution.timestamp)})
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+      </div>
+
+      <div className={cardClassName}>
         <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
           Owes lookup
         </h2>
@@ -1684,17 +2605,17 @@ export default function GroupPage() {
             className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
             value={owesFromUserId}
             onChange={(e) =>
-              setOwesFromUserId(
-                e.target.value ? Number(e.target.value) : "",
-              )
+              setOwesFromUserId(e.target.value ? Number(e.target.value) : "")
             }
           >
             <option value="">From user...</option>
-            {members.map((m) => (
+            {members
+              .filter((m) => m.id !== owesToUserId)
+              .map((m) => (
               <option key={m.id} value={m.id}>
                 {getMemberName(m)}
               </option>
-            ))}
+              ))}
           </select>
           <select
             className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
@@ -1704,17 +2625,22 @@ export default function GroupPage() {
             }
           >
             <option value="">To user...</option>
-            {members.map((m) => (
+            {members
+              .filter((m) => m.id !== owesFromUserId)
+              .map((m) => (
               <option key={m.id} value={m.id}>
                 {getMemberName(m)}
               </option>
-            ))}
+              ))}
           </select>
           <div className="flex gap-2">
             <button
               className="flex-1 rounded-xl border border-slate-300 bg-slate-900 px-3 py-2 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
               disabled={
-                loadingOwes || owesFromUserId === "" || owesToUserId === ""
+                loadingOwes ||
+                owesFromUserId === "" ||
+                owesToUserId === "" ||
+                owesFromUserId === owesToUserId
               }
               onClick={() => Number.isFinite(groupId) && loadOwes(groupId)}
             >
@@ -1723,7 +2649,10 @@ export default function GroupPage() {
             <button
               className="flex-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
               disabled={
-                loadingOwes || owesFromUserId === "" || owesToUserId === ""
+                loadingOwes ||
+                owesFromUserId === "" ||
+                owesToUserId === "" ||
+                owesFromUserId === owesToUserId
               }
               onClick={() =>
                 Number.isFinite(groupId) && loadOwesHistorical(groupId)
@@ -1743,7 +2672,7 @@ export default function GroupPage() {
               message={owesError}
               onRetry={() =>
                 Number.isFinite(groupId) &&
-                (owesHistoricalAmount !== null
+                (owesView === "historical"
                   ? loadOwesHistorical(groupId)
                   : loadOwes(groupId))
               }
@@ -1758,10 +2687,16 @@ export default function GroupPage() {
                 message="Select two members to see what’s owed."
               />
             )}
-          {!loadingOwes && !owesError && owesAmount !== null && (
+          {!loadingOwes &&
+            !owesError &&
+            owesView === "current" &&
+            owesAmount !== null && (
             <div>Current owes: ${owesAmount.toFixed(2)}</div>
           )}
-          {!loadingOwes && !owesError && owesHistoricalAmount !== null && (
+          {!loadingOwes &&
+            !owesError &&
+            owesView === "historical" &&
+            owesHistoricalAmount !== null && (
             <div>Historical owes: ${owesHistoricalAmount.toFixed(2)}</div>
           )}
         </div>
@@ -1889,11 +2824,11 @@ export default function GroupPage() {
                     {event.eventType}
                   </div>
                   <div className="mt-1">
-                    Expense #{event.expenseId ?? "—"} ·{" "}
-                    {new Date(event.createdAt).toLocaleString()}
+                    {new Date(event.createdAt).toLocaleString()} (
+                    {getShortTimeZoneLabel(event.createdAt)})
                   </div>
                   <div className="mt-2 whitespace-pre-wrap break-words text-[11px] text-slate-500">
-                    {event.payload}
+                    {formatEventPayload(event.payload)}
                   </div>
                 </li>
               ))}

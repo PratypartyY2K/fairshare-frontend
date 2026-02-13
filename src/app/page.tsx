@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
 
 type CreateGroupResponse = {
@@ -11,6 +11,9 @@ type CreateGroupResponse = {
 type Group = {
   id: number;
   name?: string;
+  memberCount?: number;
+  membersCount?: number;
+  totalMembers?: number;
 };
 
 type PaginatedResponse<T> = {
@@ -61,9 +64,16 @@ function StatusBanner({
 }
 
 export default function HomePage() {
+  const groupsPageSize = 10;
   const [groupName, setGroupName] = useState("");
-  const [createdGroupId, setCreatedGroupId] = useState<number | null>(null);
+  const [createdGroup, setCreatedGroup] = useState<Group | null>(null);
   const [groups, setGroups] = useState<Group[]>([]);
+  const [groupFilterInput, setGroupFilterInput] = useState("");
+  const [groupFilterApplied, setGroupFilterApplied] = useState("");
+  const [groupsPage, setGroupsPage] = useState(1);
+  const [groupsTotalPages, setGroupsTotalPages] = useState(1);
+  const [groupsTotalItems, setGroupsTotalItems] = useState(0);
+  const [serverFilterApplied, setServerFilterApplied] = useState(true);
   const [loading, setLoading] = useState(false);
   const [loadingGroups, setLoadingGroups] = useState(true);
   const [editingGroupId, setEditingGroupId] = useState<number | null>(null);
@@ -122,23 +132,70 @@ export default function HomePage() {
     },
   ];
 
-  async function loadGroups() {
+  function getGroupMembersCount(group: Group) {
+    if (Number.isFinite(group.memberCount)) return group.memberCount;
+    if (Number.isFinite(group.membersCount)) return group.membersCount;
+    if (Number.isFinite(group.totalMembers)) return group.totalMembers;
+    return null;
+  }
+
+  const loadGroups = useCallback(async (page = 1, nameFilter = groupFilterApplied) => {
     setGroupsError(null);
     setLoadingGroups(true);
     try {
-      const res = await api<PaginatedResponse<Group>>("/groups");
-      setGroups(res.items ?? []);
+      const query = new URLSearchParams({
+        page: String(page),
+        pageSize: String(groupsPageSize),
+      });
+      if (nameFilter.trim()) query.set("name", nameFilter.trim());
+      const res = await api<PaginatedResponse<Group>>(`/groups?${query.toString()}`);
+      const safePage =
+        Number.isFinite(res.currentPage) && res.currentPage > 0
+          ? res.currentPage
+          : page;
+      const safeTotalPages =
+        Number.isFinite(res.totalPages) && res.totalPages > 0 ? res.totalPages : 1;
+      const items = res.items ?? [];
+
+      setGroups(items);
+      setGroupsPage(safePage);
+      setGroupsTotalPages(
+        safeTotalPages,
+      );
+      setGroupsTotalItems(
+        Number.isFinite(res.totalItems) && res.totalItems >= 0 ? res.totalItems : 0,
+      );
+      if (nameFilter.trim()) {
+        const normalized = nameFilter.trim().toLowerCase();
+        const backendApplied = items.every((group) =>
+          (group.name ?? "").toLowerCase().includes(normalized),
+        );
+        setServerFilterApplied(backendApplied);
+      } else {
+        setServerFilterApplied(true);
+      }
     } catch (e: unknown) {
       setGroupsError(e instanceof Error ? e.message : "Failed to load groups");
     } finally {
       setLoadingGroups(false);
     }
-  }
+  }, [groupFilterApplied]);
+
+  const filteredGroups = useMemo(() => {
+    const normalized = groupFilterApplied.trim().toLowerCase();
+    if (!normalized) return groups;
+    return groups.filter((group) =>
+      (group.name ?? "").toLowerCase().includes(normalized),
+    );
+  }, [groups, groupFilterApplied]);
 
   useEffect(() => {
-    void loadGroups();
     void loadStatus();
   }, []);
+
+  useEffect(() => {
+    void loadGroups(1, groupFilterApplied);
+  }, [groupFilterApplied, loadGroups]);
 
   async function loadStatus() {
     setLoadingStatus(true);
@@ -163,14 +220,18 @@ export default function HomePage() {
   async function onCreateGroup() {
     setCreateGroupError(null);
     setLoading(true);
+    const trimmedName = groupName.trim();
     try {
       const res = await api<CreateGroupResponse>("/groups", {
         method: "POST",
         body: JSON.stringify({ name: groupName }),
       });
-      setCreatedGroupId(res.id);
+      setCreatedGroup({
+        id: res.id,
+        name: (res.name ?? trimmedName) || undefined,
+      });
       setGroupName("");
-      await loadGroups();
+      await loadGroups(1, groupFilterApplied);
     } catch (e: unknown) {
       if (e instanceof Error) setCreateGroupError(e.message);
       else if (typeof e === "string") setCreateGroupError(e);
@@ -201,7 +262,7 @@ export default function HomePage() {
       });
       setEditingGroupId(null);
       setEditingGroupName("");
-      await loadGroups();
+      await loadGroups(groupsPage, groupFilterApplied);
     } catch (e: unknown) {
       setRenameError(e instanceof Error ? e.message : "Failed to update group");
     } finally {
@@ -246,11 +307,11 @@ export default function HomePage() {
           />
         )}
 
-        {createdGroupId !== null && (
+        {createdGroup !== null && (
           <div className="mt-4 text-sm">
             Created group:{" "}
-            <a className="underline" href={`/groups/${createdGroupId}`}>
-              Open group #{createdGroupId}
+            <a className="underline" href={`/groups/${createdGroup.id}`}>
+              {createdGroup.name}
             </a>
           </div>
         )}
@@ -282,6 +343,36 @@ export default function HomePage() {
 
       <div className="mt-6 rounded-2xl border p-4">
         <h2 className="font-medium">Existing groups</h2>
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+          <input
+            className="flex-1 rounded-xl border px-3 py-2 text-sm outline-none"
+            placeholder="Filter by group name"
+            value={groupFilterInput}
+            onChange={(e) => setGroupFilterInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                setGroupFilterApplied(groupFilterInput.trim());
+              }
+            }}
+          />
+          <button
+            onClick={() => setGroupFilterApplied(groupFilterInput.trim())}
+            className="rounded-xl border px-4 py-2 text-sm"
+            disabled={loadingGroups}
+          >
+            Apply
+          </button>
+          <button
+            onClick={() => {
+              setGroupFilterInput("");
+              setGroupFilterApplied("");
+            }}
+            className="rounded-xl border px-4 py-2 text-sm"
+            disabled={loadingGroups || (!groupFilterInput && !groupFilterApplied)}
+          >
+            Clear
+          </button>
+        </div>
 
         {loadingGroups && (
           <StatusBanner variant="loading" message="Loading groups..." />
@@ -293,69 +384,120 @@ export default function HomePage() {
             onRetry={loadGroups}
           />
         )}
-        {!loadingGroups && !groupsError && groups.length === 0 && (
-          <StatusBanner variant="empty" message="No groups yet." />
+        {!loadingGroups &&
+          !groupsError &&
+          groupFilterApplied &&
+          !serverFilterApplied && (
+            <StatusBanner
+              variant="info"
+              message={`Backend filter is not applied yet. Showing matches on the current page for "${groupFilterApplied}".`}
+            />
+          )}
+        {!loadingGroups && !groupsError && filteredGroups.length === 0 && (
+          <StatusBanner
+            variant="empty"
+            message={
+              groupFilterApplied
+                ? "No groups match this filter on the current page."
+                : groupsTotalItems > 0
+                  ? "No groups on this page."
+                  : "No groups yet."
+            }
+          />
         )}
-        {!loadingGroups && !groupsError && groups.length > 0 && (
-          <ul className="mt-3 space-y-2">
-            {groups.map((group) => (
-              <li key={group.id} className="rounded-xl border px-3 py-2">
-                {editingGroupId === group.id ? (
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                    <input
-                      className="flex-1 rounded-xl border px-3 py-2 outline-none"
-                      value={editingGroupName}
-                      onChange={(e) => setEditingGroupName(e.target.value)}
-                      placeholder="Group name"
-                    />
-                    <div className="flex gap-2">
+        {!loadingGroups && !groupsError && filteredGroups.length > 0 && (
+          <>
+            <div className="mt-3 grid grid-cols-[1fr_auto_auto] gap-2 px-2 text-xs uppercase tracking-wide text-gray-500">
+              <span>Name</span>
+              <span>Members</span>
+              <span />
+            </div>
+            <ul className="mt-3 space-y-2">
+              {filteredGroups.map((group) => (
+                <li key={group.id} className="rounded-xl border px-3 py-2">
+                  {editingGroupId === group.id ? (
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <input
+                        className="flex-1 rounded-xl border px-3 py-2 outline-none"
+                        value={editingGroupName}
+                        onChange={(e) => setEditingGroupName(e.target.value)}
+                        placeholder="Group name"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => saveGroupName(group.id)}
+                          disabled={
+                            savingGroupId === group.id ||
+                            !editingGroupName.trim()
+                          }
+                          className="rounded-xl border px-4 py-2 disabled:opacity-50"
+                        >
+                          {savingGroupId === group.id ? "Saving..." : "Save"}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEditingGroupId(null);
+                            setEditingGroupName("");
+                          }}
+                          disabled={savingGroupId === group.id}
+                          className="rounded-xl border px-4 py-2 disabled:opacity-50"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2">
+                      <a className="underline" href={`/groups/${group.id}`}>
+                        {group.name?.trim()
+                          ? group.name
+                          : `Group #${group.id}`}
+                      </a>
+                      <span className="text-sm text-gray-600">
+                        {getGroupMembersCount(group) ?? "—"}
+                      </span>
                       <button
-                        onClick={() => saveGroupName(group.id)}
-                        disabled={
-                          savingGroupId === group.id ||
-                          !editingGroupName.trim()
-                        }
-                        className="rounded-xl border px-4 py-2 disabled:opacity-50"
+                        onClick={() => startEditingGroup(group)}
+                        className="text-sm underline"
                       >
-                        {savingGroupId === group.id ? "Saving..." : "Save"}
-                      </button>
-                      <button
-                        onClick={() => {
-                          setEditingGroupId(null);
-                          setEditingGroupName("");
-                        }}
-                        disabled={savingGroupId === group.id}
-                        className="rounded-xl border px-4 py-2 disabled:opacity-50"
-                      >
-                        Cancel
+                        Rename
                       </button>
                     </div>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-between gap-2">
-                    <a className="underline" href={`/groups/${group.id}`}>
-                      {group.name?.trim()
-                        ? group.name
-                        : `Group #${group.id}`}
-                    </a>
-                    <button
-                      onClick={() => startEditingGroup(group)}
-                      className="text-sm underline"
-                    >
-                      Rename
-                    </button>
-                  </div>
-                )}
-                {editingGroupId === group.id && renameError && (
-                  <StatusBanner
-                    variant="error"
-                    message={renameError}
-                    onRetry={() => saveGroupName(group.id)}
-                  />
-                )}
-              </li>
-            ))}
-          </ul>
+                  )}
+                  {editingGroupId === group.id && renameError && (
+                    <StatusBanner
+                      variant="error"
+                      message={renameError}
+                      onRetry={() => saveGroupName(group.id)}
+                    />
+                  )}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+        {!loadingGroups && !groupsError && groupsTotalItems > 0 && (
+          <div className="mt-3 flex items-center justify-between text-sm text-gray-600">
+            <span>
+              Page {groupsPage} of {groupsTotalPages} ({groupsTotalItems} groups total)
+            </span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => void loadGroups(groupsPage - 1, groupFilterApplied)}
+                disabled={loadingGroups || groupsPage <= 1}
+                className="rounded-xl border px-3 py-1 disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <button
+                onClick={() => void loadGroups(groupsPage + 1, groupFilterApplied)}
+                disabled={loadingGroups || groupsPage >= groupsTotalPages}
+                className="rounded-xl border px-3 py-1 disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
+          </div>
         )}
       </div>
 
