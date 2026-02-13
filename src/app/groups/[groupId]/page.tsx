@@ -1912,24 +1912,66 @@ export default function GroupPage() {
           <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
             Expenses
           </h2>
-          <select
-            className="rounded-xl border border-slate-300 bg-white px-2 py-1 text-xs"
-            value={expensesSort}
-            onChange={(e) => {
-              const nextSort = e.target.value;
-              setExpensesSort(nextSort);
-              if (Number.isFinite(groupId)) {
-                void loadExpenses(groupId, 1, expensesPageSize, nextSort);
-              }
-            }}
-            disabled={loadingExpenses}
-            aria-label="Sort expenses"
-          >
-            <option value="createdAt,desc">Newest first</option>
-            <option value="createdAt,asc">Oldest first</option>
-            <option value="amount,desc">Amount high-low</option>
-            <option value="amount,asc">Amount low-high</option>
-          </select>
+          <div className="flex items-center gap-3 text-xs text-slate-600">
+            <div className="flex items-center gap-1">
+              <span>Date</span>
+              <button
+                className={`rounded border px-1 leading-none ${expensesSort === "createdAt,asc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
+                onClick={() => {
+                  setExpensesSort("createdAt,asc");
+                  if (Number.isFinite(groupId)) {
+                    void loadExpenses(groupId, 1, expensesPageSize, "createdAt,asc");
+                  }
+                }}
+                disabled={loadingExpenses}
+                aria-label="Sort expenses by date ascending"
+              >
+                ▲
+              </button>
+              <button
+                className={`rounded border px-1 leading-none ${expensesSort === "createdAt,desc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
+                onClick={() => {
+                  setExpensesSort("createdAt,desc");
+                  if (Number.isFinite(groupId)) {
+                    void loadExpenses(groupId, 1, expensesPageSize, "createdAt,desc");
+                  }
+                }}
+                disabled={loadingExpenses}
+                aria-label="Sort expenses by date descending"
+              >
+                ▼
+              </button>
+            </div>
+            <div className="flex items-center gap-1">
+              <span>Amount</span>
+              <button
+                className={`rounded border px-1 leading-none ${expensesSort === "amount,asc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
+                onClick={() => {
+                  setExpensesSort("amount,asc");
+                  if (Number.isFinite(groupId)) {
+                    void loadExpenses(groupId, 1, expensesPageSize, "amount,asc");
+                  }
+                }}
+                disabled={loadingExpenses}
+                aria-label="Sort expenses by amount ascending"
+              >
+                ▲
+              </button>
+              <button
+                className={`rounded border px-1 leading-none ${expensesSort === "amount,desc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
+                onClick={() => {
+                  setExpensesSort("amount,desc");
+                  if (Number.isFinite(groupId)) {
+                    void loadExpenses(groupId, 1, expensesPageSize, "amount,desc");
+                  }
+                }}
+                disabled={loadingExpenses}
+                aria-label="Sort expenses by amount descending"
+              >
+                ▼
+              </button>
+            </div>
+          </div>
         </div>
 
         {loadingExpenses && (
@@ -2953,29 +2995,66 @@ export default function GroupPage() {
             Confirmed transfers
           </h2>
           <div className="flex items-center gap-2">
-            <select
-              className="rounded-xl border border-slate-300 bg-white px-2 py-1 text-xs"
-              value={confirmedTransfersSort}
-              onChange={(e) => {
-                const nextSort = e.target.value;
-                setConfirmedTransfersSort(nextSort);
-                if (Number.isFinite(groupId)) {
-                  void loadConfirmedTransfers(
-                    groupId,
-                    1,
-                    confirmedTransfersPageSize,
-                    nextSort,
-                  );
-                }
-              }}
-              disabled={loadingConfirmedTransfers}
-              aria-label="Sort confirmed transfers"
-            >
-              <option value="createdAt,desc">Newest first</option>
-              <option value="createdAt,asc">Oldest first</option>
-              <option value="amount,desc">Amount high-low</option>
-              <option value="amount,asc">Amount low-high</option>
-            </select>
+            <div className="flex items-center gap-3 text-xs text-slate-600">
+              <div className="flex items-center gap-1">
+                <span>Date</span>
+                <button
+                  className={`rounded border px-1 leading-none ${confirmedTransfersSort === "createdAt,asc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
+                  onClick={() => {
+                    setConfirmedTransfersSort("createdAt,asc");
+                    if (Number.isFinite(groupId)) {
+                      void loadConfirmedTransfers(groupId, 1, confirmedTransfersPageSize, "createdAt,asc");
+                    }
+                  }}
+                  disabled={loadingConfirmedTransfers}
+                  aria-label="Sort confirmed transfers by date ascending"
+                >
+                  ▲
+                </button>
+                <button
+                  className={`rounded border px-1 leading-none ${confirmedTransfersSort === "createdAt,desc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
+                  onClick={() => {
+                    setConfirmedTransfersSort("createdAt,desc");
+                    if (Number.isFinite(groupId)) {
+                      void loadConfirmedTransfers(groupId, 1, confirmedTransfersPageSize, "createdAt,desc");
+                    }
+                  }}
+                  disabled={loadingConfirmedTransfers}
+                  aria-label="Sort confirmed transfers by date descending"
+                >
+                  ▼
+                </button>
+              </div>
+              <div className="flex items-center gap-1">
+                <span>Amount</span>
+                <button
+                  className={`rounded border px-1 leading-none ${confirmedTransfersSort === "amount,asc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
+                  onClick={() => {
+                    setConfirmedTransfersSort("amount,asc");
+                    if (Number.isFinite(groupId)) {
+                      void loadConfirmedTransfers(groupId, 1, confirmedTransfersPageSize, "amount,asc");
+                    }
+                  }}
+                  disabled={loadingConfirmedTransfers}
+                  aria-label="Sort confirmed transfers by amount ascending"
+                >
+                  ▲
+                </button>
+                <button
+                  className={`rounded border px-1 leading-none ${confirmedTransfersSort === "amount,desc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
+                  onClick={() => {
+                    setConfirmedTransfersSort("amount,desc");
+                    if (Number.isFinite(groupId)) {
+                      void loadConfirmedTransfers(groupId, 1, confirmedTransfersPageSize, "amount,desc");
+                    }
+                  }}
+                  disabled={loadingConfirmedTransfers}
+                  aria-label="Sort confirmed transfers by amount descending"
+                >
+                  ▼
+                </button>
+              </div>
+            </div>
             <button
               className="text-xs font-medium text-slate-600 underline"
               onClick={() =>
@@ -3110,22 +3189,35 @@ export default function GroupPage() {
             Expense events
           </h2>
           <div className="flex items-center gap-2">
-            <select
-              className="rounded-xl border border-slate-300 bg-white px-2 py-1 text-xs"
-              value={eventsSort}
-              onChange={(e) => {
-                const nextSort = e.target.value;
-                setEventsSort(nextSort);
-                if (Number.isFinite(groupId)) {
-                  void loadEvents(groupId, 1, eventsPageSize, nextSort);
-                }
-              }}
-              disabled={loadingEvents}
-              aria-label="Sort events"
-            >
-              <option value="createdAt,desc">Newest first</option>
-              <option value="createdAt,asc">Oldest first</option>
-            </select>
+            <div className="flex items-center gap-1 text-xs text-slate-600">
+              <span>Date</span>
+              <button
+                className={`rounded border px-1 leading-none ${eventsSort === "createdAt,asc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
+                onClick={() => {
+                  setEventsSort("createdAt,asc");
+                  if (Number.isFinite(groupId)) {
+                    void loadEvents(groupId, 1, eventsPageSize, "createdAt,asc");
+                  }
+                }}
+                disabled={loadingEvents}
+                aria-label="Sort events by date ascending"
+              >
+                ▲
+              </button>
+              <button
+                className={`rounded border px-1 leading-none ${eventsSort === "createdAt,desc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
+                onClick={() => {
+                  setEventsSort("createdAt,desc");
+                  if (Number.isFinite(groupId)) {
+                    void loadEvents(groupId, 1, eventsPageSize, "createdAt,desc");
+                  }
+                }}
+                disabled={loadingEvents}
+                aria-label="Sort events by date descending"
+              >
+                ▼
+              </button>
+            </div>
             <button
               className="text-xs font-medium text-slate-600 underline"
               onClick={() =>

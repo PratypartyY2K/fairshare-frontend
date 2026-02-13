@@ -162,7 +162,7 @@ export default function HomePage() {
   const [groupsPage, setGroupsPage] = useState(1);
   const [groupsTotalPages, setGroupsTotalPages] = useState(1);
   const [groupsTotalItems, setGroupsTotalItems] = useState(0);
-  const [groupsSort, setGroupsSort] = useState("id,desc");
+  const [groupsSort, setGroupsSort] = useState("name,asc");
   const [serverFilterApplied, setServerFilterApplied] = useState(true);
   const [loading, setLoading] = useState(false);
   const [loadingGroups, setLoadingGroups] = useState(true);
@@ -469,20 +469,6 @@ export default function HomePage() {
           >
             Clear
           </button>
-          <select
-            className="rounded-xl border px-3 py-2 text-sm"
-            value={groupsSort}
-            onChange={(e) => setGroupsSort(e.target.value)}
-            disabled={loadingGroups}
-            aria-label="Sort groups"
-          >
-            <option value="id,desc">Newest first</option>
-            <option value="id,asc">Oldest first</option>
-            <option value="name,asc">Name A-Z</option>
-            <option value="name,desc">Name Z-A</option>
-            <option value="memberCount,desc">Most members</option>
-            <option value="memberCount,asc">Fewest members</option>
-          </select>
         </div>
 
         {loadingGroups && (
@@ -518,9 +504,45 @@ export default function HomePage() {
         )}
         {!loadingGroups && !groupsError && filteredGroups.length > 0 && (
           <>
-            <div className="mt-3 grid grid-cols-[1fr_auto_auto] gap-2 px-2 text-xs uppercase tracking-wide text-gray-500">
-              <span>Name</span>
-              <span>Members</span>
+            <div className="mt-3 grid grid-cols-[1fr_auto_auto] items-center gap-2 px-2 text-xs uppercase tracking-wide text-gray-500">
+              <div className="flex items-center gap-1">
+                <span>Name</span>
+                <button
+                  className={`rounded border px-1 leading-none ${groupsSort === "name,asc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
+                  onClick={() => setGroupsSort("name,asc")}
+                  disabled={loadingGroups}
+                  aria-label="Sort name ascending"
+                >
+                  ▲
+                </button>
+                <button
+                  className={`rounded border px-1 leading-none ${groupsSort === "name,desc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
+                  onClick={() => setGroupsSort("name,desc")}
+                  disabled={loadingGroups}
+                  aria-label="Sort name descending"
+                >
+                  ▼
+                </button>
+              </div>
+              <div className="flex items-center justify-end gap-1">
+                <span>Members</span>
+                <button
+                  className={`rounded border px-1 leading-none ${groupsSort === "memberCount,asc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
+                  onClick={() => setGroupsSort("memberCount,asc")}
+                  disabled={loadingGroups}
+                  aria-label="Sort members ascending"
+                >
+                  ▲
+                </button>
+                <button
+                  className={`rounded border px-1 leading-none ${groupsSort === "memberCount,desc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
+                  onClick={() => setGroupsSort("memberCount,desc")}
+                  disabled={loadingGroups}
+                  aria-label="Sort members descending"
+                >
+                  ▼
+                </button>
+              </div>
               <span />
             </div>
             <ul className="mt-3 space-y-2">
