@@ -26,6 +26,87 @@ type PaginatedResponse<T> = {
 
 type BannerVariant = "loading" | "empty" | "error" | "info";
 
+function hasWildcardPattern(value: string) {
+  return value.includes("*") || value.includes("?");
+}
+
+function wildcardToRegex(pattern: string) {
+  const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(
+    `^${escaped.replace(/\\\*/g, ".*").replace(/\\\?/g, ".")}$`,
+    "i",
+  );
+}
+
+function matchesGroupName(name: string, pattern: string) {
+  const normalizedPattern = pattern.trim();
+  if (!normalizedPattern) return true;
+  if (hasWildcardPattern(normalizedPattern)) {
+    return wildcardToRegex(normalizedPattern).test(name);
+  }
+  return name.toLowerCase().includes(normalizedPattern.toLowerCase());
+}
+
+function getVisiblePages(currentPage: number, totalPages: number) {
+  const pages = new Set<number>([1, totalPages, currentPage - 1, currentPage, currentPage + 1]);
+  return Array.from(pages)
+    .filter((page) => page >= 1 && page <= totalPages)
+    .sort((a, b) => a - b);
+}
+
+function PaginationControls({
+  currentPage,
+  totalPages,
+  loading,
+  onPageChange,
+}: {
+  currentPage: number;
+  totalPages: number;
+  loading: boolean;
+  onPageChange: (page: number) => void;
+}) {
+  if (totalPages <= 1) return null;
+  const visiblePages = getVisiblePages(currentPage, totalPages);
+
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        onClick={() => onPageChange(currentPage - 1)}
+        disabled={loading || currentPage <= 1}
+        className="rounded-xl border px-3 py-1 disabled:opacity-50"
+      >
+        Previous
+      </button>
+      {visiblePages.map((page, index) => {
+        const showLeftGap = index > 0 && visiblePages[index - 1] < page - 1;
+        return (
+          <span key={`page-${page}`} className="flex items-center gap-2">
+            {showLeftGap && <span className="text-gray-400">…</span>}
+            <button
+              onClick={() => onPageChange(page)}
+              disabled={loading}
+              className={`rounded-xl border px-3 py-1 disabled:opacity-50 ${
+                page === currentPage
+                  ? "border-slate-900 bg-slate-900 font-semibold text-white ring-2 ring-slate-300"
+                  : "border-slate-300 bg-white"
+              }`}
+            >
+              {page}
+            </button>
+          </span>
+        );
+      })}
+      <button
+        onClick={() => onPageChange(currentPage + 1)}
+        disabled={loading || currentPage >= totalPages}
+        className="rounded-xl border px-3 py-1 disabled:opacity-50"
+      >
+        Next
+      </button>
+    </div>
+  );
+}
+
 function StatusBanner({
   variant,
   message,
@@ -64,7 +145,7 @@ function StatusBanner({
 }
 
 export default function HomePage() {
-  const groupsPageSize = 10;
+  const [groupsPageSize, setGroupsPageSize] = useState(10);
   const [groupName, setGroupName] = useState("");
   const [createdGroup, setCreatedGroup] = useState<Group | null>(null);
   const [groups, setGroups] = useState<Group[]>([]);
@@ -139,13 +220,18 @@ export default function HomePage() {
     return null;
   }
 
-  const loadGroups = useCallback(async (page = 1, nameFilter = groupFilterApplied) => {
+  const loadGroups = useCallback(
+    async (
+      page = 1,
+      nameFilter = groupFilterApplied,
+      pageSize = groupsPageSize,
+    ) => {
     setGroupsError(null);
     setLoadingGroups(true);
     try {
       const query = new URLSearchParams({
         page: String(page),
-        pageSize: String(groupsPageSize),
+        pageSize: String(pageSize),
       });
       if (nameFilter.trim()) query.set("name", nameFilter.trim());
       const res = await api<PaginatedResponse<Group>>(`/groups?${query.toString()}`);
@@ -166,9 +252,9 @@ export default function HomePage() {
         Number.isFinite(res.totalItems) && res.totalItems >= 0 ? res.totalItems : 0,
       );
       if (nameFilter.trim()) {
-        const normalized = nameFilter.trim().toLowerCase();
+        const normalized = nameFilter.trim();
         const backendApplied = items.every((group) =>
-          (group.name ?? "").toLowerCase().includes(normalized),
+          matchesGroupName(group.name ?? "", normalized),
         );
         setServerFilterApplied(backendApplied);
       } else {
@@ -179,13 +265,13 @@ export default function HomePage() {
     } finally {
       setLoadingGroups(false);
     }
-  }, [groupFilterApplied]);
+  }, [groupFilterApplied, groupsPageSize]);
 
   const filteredGroups = useMemo(() => {
-    const normalized = groupFilterApplied.trim().toLowerCase();
+    const normalized = groupFilterApplied.trim();
     if (!normalized) return groups;
     return groups.filter((group) =>
-      (group.name ?? "").toLowerCase().includes(normalized),
+      matchesGroupName(group.name ?? "", normalized),
     );
   }, [groups, groupFilterApplied]);
 
@@ -195,7 +281,7 @@ export default function HomePage() {
 
   useEffect(() => {
     void loadGroups(1, groupFilterApplied);
-  }, [groupFilterApplied, loadGroups]);
+  }, [groupFilterApplied, groupsPageSize, loadGroups]);
 
   async function loadStatus() {
     setLoadingStatus(true);
@@ -346,7 +432,7 @@ export default function HomePage() {
         <div className="mt-3 flex flex-col gap-2 sm:flex-row">
           <input
             className="flex-1 rounded-xl border px-3 py-2 text-sm outline-none"
-            placeholder="Filter by group name"
+            placeholder="Filter by group name (supports * and ?)"
             value={groupFilterInput}
             onChange={(e) => setGroupFilterInput(e.target.value)}
             onKeyDown={(e) => {
@@ -481,21 +567,34 @@ export default function HomePage() {
             <span>
               Page {groupsPage} of {groupsTotalPages} ({groupsTotalItems} groups total)
             </span>
-            <div className="flex gap-2">
-              <button
-                onClick={() => void loadGroups(groupsPage - 1, groupFilterApplied)}
-                disabled={loadingGroups || groupsPage <= 1}
-                className="rounded-xl border px-3 py-1 disabled:opacity-50"
-              >
-                Previous
-              </button>
-              <button
-                onClick={() => void loadGroups(groupsPage + 1, groupFilterApplied)}
-                disabled={loadingGroups || groupsPage >= groupsTotalPages}
-                className="rounded-xl border px-3 py-1 disabled:opacity-50"
-              >
-                Next
-              </button>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 text-xs text-gray-600">
+                <span>Page size</span>
+                <select
+                  className="rounded-xl border px-2 py-1"
+                  value={groupsPageSize}
+                  onChange={(e) => {
+                    const nextSize = Number(e.target.value);
+                    setGroupsPageSize(nextSize);
+                    void loadGroups(1, groupFilterApplied, nextSize);
+                  }}
+                  disabled={loadingGroups}
+                >
+                  {[5, 10, 25, 50, 100].map((size) => (
+                    <option key={size} value={size}>
+                      {size}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <PaginationControls
+                currentPage={groupsPage}
+                totalPages={groupsTotalPages}
+                loading={loadingGroups}
+                onPageChange={(page) =>
+                  void loadGroups(page, groupFilterApplied)
+                }
+              />
             </div>
           </div>
         )}

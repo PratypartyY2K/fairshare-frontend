@@ -154,7 +154,74 @@ function StatusBanner({
   );
 }
 
+function getVisiblePages(currentPage: number, totalPages: number) {
+  const pages = new Set<number>([
+    1,
+    totalPages,
+    currentPage - 1,
+    currentPage,
+    currentPage + 1,
+  ]);
+  return Array.from(pages)
+    .filter((page) => page >= 1 && page <= totalPages)
+    .sort((a, b) => a - b);
+}
+
+function PaginationControls({
+  currentPage,
+  totalPages,
+  loading,
+  onPageChange,
+}: {
+  currentPage: number;
+  totalPages: number;
+  loading: boolean;
+  onPageChange: (page: number) => void;
+}) {
+  if (totalPages <= 1) return null;
+  const visiblePages = getVisiblePages(currentPage, totalPages);
+
+  return (
+    <div className="mt-3 flex items-center justify-end gap-2 text-xs">
+      <button
+        onClick={() => onPageChange(currentPage - 1)}
+        disabled={loading || currentPage <= 1}
+        className="rounded-xl border border-slate-300 bg-white px-3 py-1 disabled:opacity-50"
+      >
+        Previous
+      </button>
+      {visiblePages.map((page, index) => {
+        const showGap = index > 0 && visiblePages[index - 1] < page - 1;
+        return (
+          <span key={`page-${page}`} className="flex items-center gap-2">
+            {showGap && <span className="text-slate-400">…</span>}
+            <button
+              onClick={() => onPageChange(page)}
+              disabled={loading}
+              className={`rounded-xl border px-3 py-1 disabled:opacity-50 ${
+                page === currentPage
+                  ? "border-slate-900 bg-slate-900 font-semibold text-white ring-2 ring-slate-300"
+                  : "border-slate-300 bg-white text-slate-700"
+              }`}
+            >
+              {page}
+            </button>
+          </span>
+        );
+      })}
+      <button
+        onClick={() => onPageChange(currentPage + 1)}
+        disabled={loading || currentPage >= totalPages}
+        className="rounded-xl border border-slate-300 bg-white px-3 py-1 disabled:opacity-50"
+      >
+        Next
+      </button>
+    </div>
+  );
+}
+
 export default function GroupPage() {
+  const defaultPageSize = 10;
   const pathname = usePathname();
   const groupId = useMemo(() => {
     if (!pathname) return NaN;
@@ -174,6 +241,10 @@ export default function GroupPage() {
   const [savingGroupName, setSavingGroupName] = useState(false);
   const [renameGroupError, setRenameGroupError] = useState<string | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [expensesPage, setExpensesPage] = useState(1);
+  const [expensesPageSize, setExpensesPageSize] = useState(defaultPageSize);
+  const [expensesTotalPages, setExpensesTotalPages] = useState(1);
+  const [expensesTotalItems, setExpensesTotalItems] = useState(0);
   const [desc, setDesc] = useState("");
   const [amount, setAmount] = useState<string>("");
   const [paidByUserId, setPaidByUserId] = useState<number | "">("");
@@ -239,12 +310,23 @@ export default function GroupPage() {
     useState<number | "">("");
 
   const [events, setEvents] = useState<EventResponse[]>([]);
+  const [eventsPage, setEventsPage] = useState(1);
+  const [eventsPageSize, setEventsPageSize] = useState(defaultPageSize);
+  const [eventsTotalPages, setEventsTotalPages] = useState(1);
+  const [eventsTotalItems, setEventsTotalItems] = useState(0);
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [eventsError, setEventsError] = useState<string | null>(null);
 
   const [confirmedTransfers, setConfirmedTransfers] = useState<
     ConfirmedTransfer[]
   >([]);
+  const [confirmedTransfersPage, setConfirmedTransfersPage] = useState(1);
+  const [confirmedTransfersPageSize, setConfirmedTransfersPageSize] =
+    useState(defaultPageSize);
+  const [confirmedTransfersTotalPages, setConfirmedTransfersTotalPages] =
+    useState(1);
+  const [confirmedTransfersTotalItems, setConfirmedTransfersTotalItems] =
+    useState(0);
   const [loadingConfirmedTransfers, setLoadingConfirmedTransfers] =
     useState(false);
   const [confirmedTransfersError, setConfirmedTransfersError] =
@@ -838,10 +920,10 @@ export default function GroupPage() {
   useEffect(() => {
     if (!Number.isFinite(groupId) || groupId <= 0) return;
     loadGroup(groupId);
-    loadExpenses(groupId);
+    loadExpenses(groupId, 1);
     loadSettlements(groupId);
     loadLedger(groupId);
-    loadEvents(groupId);
+    loadEvents(groupId, 1);
 
     setLoadingLedgerExplanation(true);
     setLedgerExplanationError(null);
@@ -870,10 +952,25 @@ export default function GroupPage() {
     setLoadingConfirmedTransfers(true);
     setConfirmedTransfersError(null);
     void api<PaginatedResponse<ConfirmedTransfer>>(
-      `/groups/${groupId}/confirmed-transfers`,
+      `/groups/${groupId}/confirmed-transfers?page=1&pageSize=${defaultPageSize}`,
     )
       .then((res) => {
         setConfirmedTransfers(res.items ?? []);
+        setConfirmedTransfersPage(
+          Number.isFinite(res.currentPage) && res.currentPage > 0
+            ? res.currentPage
+            : 1,
+        );
+        setConfirmedTransfersTotalPages(
+          Number.isFinite(res.totalPages) && res.totalPages > 0
+            ? res.totalPages
+            : 1,
+        );
+        setConfirmedTransfersTotalItems(
+          Number.isFinite(res.totalItems) && res.totalItems >= 0
+            ? res.totalItems
+            : 0,
+        );
       })
       .catch((e: unknown) => {
         setConfirmedTransfersError(
@@ -950,14 +1047,37 @@ export default function GroupPage() {
     }
   }
 
-  async function loadExpenses(gid: number) {
+  async function loadExpenses(
+    gid: number,
+    page = expensesPage,
+    pageSize = expensesPageSize,
+  ) {
     setLoadingExpenses(true);
     setExpensesError(null);
     try {
+      const query = new URLSearchParams({
+        page: String(page),
+        pageSize: String(pageSize),
+      });
       const res = await api<PaginatedResponse<Expense>>(
-        `/groups/${gid}/expenses`,
+        `/groups/${gid}/expenses?${query.toString()}`,
       );
       setExpenses(res.items ?? []);
+      setExpensesPage(
+        Number.isFinite(res.currentPage) && res.currentPage > 0
+          ? res.currentPage
+          : page,
+      );
+      setExpensesTotalPages(
+        Number.isFinite(res.totalPages) && res.totalPages > 0
+          ? res.totalPages
+          : 1,
+      );
+      setExpensesTotalItems(
+        Number.isFinite(res.totalItems) && res.totalItems >= 0
+          ? res.totalItems
+          : 0,
+      );
     } catch (e: unknown) {
       setExpensesError(
         e instanceof Error ? e.message : "Failed to load expenses",
@@ -1026,14 +1146,33 @@ export default function GroupPage() {
     }
   }
 
-  async function loadEvents(gid: number) {
+  async function loadEvents(gid: number, page = eventsPage, pageSize = eventsPageSize) {
     setLoadingEvents(true);
     setEventsError(null);
     try {
+      const query = new URLSearchParams({
+        page: String(page),
+        pageSize: String(pageSize),
+      });
       const res = await api<PaginatedResponse<EventResponse>>(
-        `/groups/${gid}/events`,
+        `/groups/${gid}/events?${query.toString()}`,
       );
       setEvents(res.items ?? []);
+      setEventsPage(
+        Number.isFinite(res.currentPage) && res.currentPage > 0
+          ? res.currentPage
+          : page,
+      );
+      setEventsTotalPages(
+        Number.isFinite(res.totalPages) && res.totalPages > 0
+          ? res.totalPages
+          : 1,
+      );
+      setEventsTotalItems(
+        Number.isFinite(res.totalItems) && res.totalItems >= 0
+          ? res.totalItems
+          : 0,
+      );
     } catch (e: unknown) {
       setEventsError(
         e instanceof Error ? e.message : "Failed to load events",
@@ -1043,17 +1182,40 @@ export default function GroupPage() {
     }
   }
 
-  async function loadConfirmedTransfers(gid: number) {
+  async function loadConfirmedTransfers(
+    gid: number,
+    page = confirmedTransfersPage,
+    pageSize = confirmedTransfersPageSize,
+  ) {
     setLoadingConfirmedTransfers(true);
     setConfirmedTransfersError(null);
     try {
-      const query = confirmedFilter.trim()
-        ? `?confirmationId=${encodeURIComponent(confirmedFilter.trim())}`
-        : "";
+      const query = new URLSearchParams({
+        page: String(page),
+        pageSize: String(pageSize),
+      });
+      if (confirmedFilter.trim()) {
+        query.set("confirmationId", confirmedFilter.trim());
+      }
       const res = await api<PaginatedResponse<ConfirmedTransfer>>(
-        `/groups/${gid}/confirmed-transfers${query}`,
+        `/groups/${gid}/confirmed-transfers?${query.toString()}`,
       );
       setConfirmedTransfers(res.items ?? []);
+      setConfirmedTransfersPage(
+        Number.isFinite(res.currentPage) && res.currentPage > 0
+          ? res.currentPage
+          : page,
+      );
+      setConfirmedTransfersTotalPages(
+        Number.isFinite(res.totalPages) && res.totalPages > 0
+          ? res.totalPages
+          : 1,
+      );
+      setConfirmedTransfersTotalItems(
+        Number.isFinite(res.totalItems) && res.totalItems >= 0
+          ? res.totalItems
+          : 0,
+      );
     } catch (e: unknown) {
       setConfirmedTransfersError(
         e instanceof Error ? e.message : "Failed to load confirmed transfers",
@@ -1734,7 +1896,9 @@ export default function GroupPage() {
           <StatusBanner
             variant="error"
             message={expensesError}
-            onRetry={() => Number.isFinite(groupId) && loadExpenses(groupId)}
+            onRetry={() =>
+              Number.isFinite(groupId) && loadExpenses(groupId, expensesPage)
+            }
           />
         )}
         {deleteExpenseError && (
@@ -1816,6 +1980,44 @@ export default function GroupPage() {
                 </li>
               ))}
             </ul>
+          </div>
+        )}
+        {!loadingExpenses && !expensesError && expensesTotalItems > 0 && (
+          <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
+            <span>
+              Page {expensesPage} of {expensesTotalPages} ({expensesTotalItems} expenses)
+            </span>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2">
+                <span>Page size</span>
+                <select
+                  className="rounded-xl border border-slate-300 bg-white px-2 py-1"
+                  value={expensesPageSize}
+                  onChange={(e) => {
+                    const nextSize = Number(e.target.value);
+                    setExpensesPageSize(nextSize);
+                    if (Number.isFinite(groupId)) {
+                      void loadExpenses(groupId, 1, nextSize);
+                    }
+                  }}
+                  disabled={loadingExpenses}
+                >
+                  {[5, 10, 25, 50, 100].map((size) => (
+                    <option key={size} value={size}>
+                      {size}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <PaginationControls
+                currentPage={expensesPage}
+                totalPages={expensesTotalPages}
+                loading={loadingExpenses}
+                onPageChange={(page) =>
+                  Number.isFinite(groupId) && void loadExpenses(groupId, page)
+                }
+              />
+            </div>
           </div>
         )}
       </div>
@@ -2710,7 +2912,8 @@ export default function GroupPage() {
           <button
             className="text-xs font-medium text-slate-600 underline"
             onClick={() =>
-              Number.isFinite(groupId) && loadConfirmedTransfers(groupId)
+              Number.isFinite(groupId) &&
+              loadConfirmedTransfers(groupId, confirmedTransfersPage)
             }
             disabled={loadingConfirmedTransfers}
           >
@@ -2723,6 +2926,11 @@ export default function GroupPage() {
           placeholder="Filter by confirmation ID (optional)"
           value={confirmedFilter}
           onChange={(e) => setConfirmedFilter(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && Number.isFinite(groupId)) {
+              void loadConfirmedTransfers(groupId, 1);
+            }
+          }}
         />
 
         {loadingConfirmedTransfers && (
@@ -2736,7 +2944,8 @@ export default function GroupPage() {
             variant="error"
             message={confirmedTransfersError}
             onRetry={() =>
-              Number.isFinite(groupId) && loadConfirmedTransfers(groupId)
+              Number.isFinite(groupId) &&
+              loadConfirmedTransfers(groupId, confirmedTransfersPage)
             }
           />
         )}
@@ -2783,6 +2992,48 @@ export default function GroupPage() {
               })}
             </div>
           )}
+        {!loadingConfirmedTransfers &&
+          !confirmedTransfersError &&
+          confirmedTransfersTotalItems > 0 && (
+            <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
+              <span>
+                Page {confirmedTransfersPage} of {confirmedTransfersTotalPages} (
+                {confirmedTransfersTotalItems} transfers)
+              </span>
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-2">
+                  <span>Page size</span>
+                  <select
+                    className="rounded-xl border border-slate-300 bg-white px-2 py-1"
+                    value={confirmedTransfersPageSize}
+                    onChange={(e) => {
+                      const nextSize = Number(e.target.value);
+                      setConfirmedTransfersPageSize(nextSize);
+                      if (Number.isFinite(groupId)) {
+                        void loadConfirmedTransfers(groupId, 1, nextSize);
+                      }
+                    }}
+                    disabled={loadingConfirmedTransfers}
+                  >
+                    {[5, 10, 25, 50, 100].map((size) => (
+                      <option key={size} value={size}>
+                        {size}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <PaginationControls
+                  currentPage={confirmedTransfersPage}
+                  totalPages={confirmedTransfersTotalPages}
+                  loading={loadingConfirmedTransfers}
+                  onPageChange={(page) =>
+                    Number.isFinite(groupId) &&
+                    void loadConfirmedTransfers(groupId, page)
+                  }
+                />
+              </div>
+            </div>
+          )}
       </div>
 
       <div className={cardClassName}>
@@ -2792,7 +3043,9 @@ export default function GroupPage() {
           </h2>
           <button
             className="text-xs font-medium text-slate-600 underline"
-            onClick={() => Number.isFinite(groupId) && loadEvents(groupId)}
+            onClick={() =>
+              Number.isFinite(groupId) && loadEvents(groupId, eventsPage)
+            }
             disabled={loadingEvents}
           >
             {loadingEvents ? "Refreshing..." : "Refresh"}
@@ -2806,7 +3059,9 @@ export default function GroupPage() {
           <StatusBanner
             variant="error"
             message={eventsError}
-            onRetry={() => Number.isFinite(groupId) && loadEvents(groupId)}
+            onRetry={() =>
+              Number.isFinite(groupId) && loadEvents(groupId, eventsPage)
+            }
           />
         )}
         {!loadingEvents && !eventsError && events.length === 0 && (
@@ -2833,6 +3088,44 @@ export default function GroupPage() {
                 </li>
               ))}
             </ul>
+          </div>
+        )}
+        {!loadingEvents && !eventsError && eventsTotalItems > 0 && (
+          <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
+            <span>
+              Page {eventsPage} of {eventsTotalPages} ({eventsTotalItems} events)
+            </span>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2">
+                <span>Page size</span>
+                <select
+                  className="rounded-xl border border-slate-300 bg-white px-2 py-1"
+                  value={eventsPageSize}
+                  onChange={(e) => {
+                    const nextSize = Number(e.target.value);
+                    setEventsPageSize(nextSize);
+                    if (Number.isFinite(groupId)) {
+                      void loadEvents(groupId, 1, nextSize);
+                    }
+                  }}
+                  disabled={loadingEvents}
+                >
+                  {[5, 10, 25, 50, 100].map((size) => (
+                    <option key={size} value={size}>
+                      {size}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <PaginationControls
+                currentPage={eventsPage}
+                totalPages={eventsTotalPages}
+                loading={loadingEvents}
+                onPageChange={(page) =>
+                  Number.isFinite(groupId) && void loadEvents(groupId, page)
+                }
+              />
+            </div>
           </div>
         )}
       </div>
