@@ -2,6 +2,43 @@
 
 Next.js App Router frontend for managing shared expenses in groups: members, expenses, settlement suggestions, ledger explanations, and audit history.
 
+## Why Fairshare?
+
+Unlike traditional expense-splitting apps, Fairshare provides:
+
+- **Explainable ledgers**: Understand exactly why you owe what you owe with detailed breakdowns
+- **Audit trail**: Complete history of edits, voids, and transfers for transparency and accountability
+- **Deterministic rounding + idempotent actions**: Consistent, repeatable operations that prevent double-charging
+- **Fairness-aware splitting** _(coming soon)_: Advanced algorithms for equitable expense distribution
+
+## Quickstart: Running the Full System
+
+```bash
+# 1. Clone the repository (if needed)
+git clone https://github.com/PratypartyY2K/fairshare-frontend.git
+cd fairshare-frontend
+
+# 2. Initialize submodules (if backend is included as a submodule)
+git submodule update --init --recursive
+
+# 3. Run the backend (adjust according to your backend setup)
+# Example: cd backend && ./gradlew bootRun
+# Or: cd backend && npm start
+# Backend typically runs on http://localhost:8080
+
+# 4. Set up frontend environment
+cp .env.local.example .env.local  # Or create .env.local manually
+# Add: NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
+
+# 5. Run the frontend
+npm install
+npm run dev
+
+# 6. Access the application
+# Frontend: http://localhost:3000
+# Backend API docs (Swagger): http://localhost:8080/swagger-ui.html
+```
+
 ## Tech Stack
 
 - Next.js `16.1.4` (App Router)
