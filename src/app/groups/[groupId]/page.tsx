@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { api } from "../../../lib/api";
+import type { PaginatedResponse } from "../../../lib/pagination";
 
 type Member = {
   id: number;
@@ -105,14 +106,6 @@ type ConfirmedTransfer = {
   amount: string;
   confirmationId?: string;
   createdAt: string;
-};
-
-type PaginatedResponse<T> = {
-  items: T[];
-  totalItems: number;
-  totalPages: number;
-  currentPage: number;
-  pageSize: number;
 };
 
 type BannerVariant = "loading" | "empty" | "error" | "info";

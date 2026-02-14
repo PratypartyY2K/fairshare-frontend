@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
+import type { PaginatedResponse } from "../lib/pagination";
 
 type CreateGroupResponse = {
   id: number;
@@ -14,14 +15,6 @@ type Group = {
   memberCount?: number;
   membersCount?: number;
   totalMembers?: number;
-};
-
-type PaginatedResponse<T> = {
-  items: T[];
-  totalItems: number;
-  totalPages: number;
-  currentPage: number;
-  pageSize: number;
 };
 
 type BannerVariant = "loading" | "empty" | "error" | "info";
