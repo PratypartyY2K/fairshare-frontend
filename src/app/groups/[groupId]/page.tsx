@@ -233,6 +233,13 @@ export default function GroupPage() {
     const parts = pathname.split("/").filter(Boolean);
     return Number(parts[1]);
   }, [pathname]);
+  const currentUserStorageKey = useMemo(
+    () =>
+      Number.isFinite(groupId)
+        ? `fairshare:group:${groupId}:current-user-id`
+        : "",
+    [groupId],
+  );
 
   const [members, setMembers] = useState<Member[]>([]);
   const [userName, setUserName] = useState("");
@@ -317,6 +324,7 @@ export default function GroupPage() {
   const [ledgerExplanationError, setLedgerExplanationError] = useState<
     string | null
   >(null);
+  const [currentUserId, setCurrentUserId] = useState<number | "">("");
   const [selectedLedgerExplanationUserId, setSelectedLedgerExplanationUserId] =
     useState<number | "">("");
 
@@ -829,6 +837,43 @@ export default function GroupPage() {
     return [];
   }
 
+  function getLedgerWhyParts(entry: LedgerExplanationEntry) {
+    const parts: string[] = [];
+    const expenses = entry.expenses ?? entry.contributingExpenses ?? [];
+    const transfersIn = entry.transfersIn ?? [];
+    const transfersOut = entry.transfersOut ?? [];
+    const transfers = entry.transfers ?? entry.contributingTransfers ?? [];
+    const contributions = entry.contributions ?? [];
+
+    if (expenses.length > 0) {
+      parts.push(
+        `${expenses.length} expense${expenses.length === 1 ? "" : "s"}`,
+      );
+    }
+
+    if (transfersIn.length > 0 || transfersOut.length > 0) {
+      parts.push(
+        `${transfersIn.length} incoming / ${transfersOut.length} outgoing transfer${transfersIn.length + transfersOut.length === 1 ? "" : "s"}`,
+      );
+    } else if (transfers.length > 0) {
+      parts.push(
+        `${transfers.length} transfer${transfers.length === 1 ? "" : "s"}`,
+      );
+    }
+
+    const reasons = contributions
+      .map((contribution) =>
+        formatContributionDescription(contribution.description),
+      )
+      .filter((reason) => reason !== "—")
+      .slice(0, 2);
+    if (reasons.length > 0) {
+      parts.push(reasons.join(" • "));
+    }
+
+    return parts;
+  }
+
   function formatContributionDescription(description?: string) {
     if (!description?.trim()) return "—";
     return description.replace(/user\s+#?(\d+)/gi, (_, userIdText: string) => {
@@ -967,15 +1012,6 @@ export default function GroupPage() {
     )
       .then((res) => {
         setLedgerExplanation(res);
-        const entries =
-          res.entries ?? res.users ?? res.items ?? res.explanations ?? [];
-        setSelectedLedgerExplanationUserId((prev) => {
-          if (entries.length === 0) return "";
-          if (prev !== "" && entries.some((entry) => entry.userId === prev)) {
-            return prev;
-          }
-          return "";
-        });
       })
       .catch((e: unknown) => {
         setLedgerExplanationError(
@@ -1030,6 +1066,74 @@ export default function GroupPage() {
 
   const ledgerExplanationEntries =
     getLedgerExplanationEntries(ledgerExplanation);
+  const ledgerExplanationByUserId = useMemo(
+    () =>
+      new Map(
+        ledgerExplanationEntries.map((entry) => [entry.userId, entry] as const),
+      ),
+    [ledgerExplanationEntries],
+  );
+
+  useEffect(() => {
+    if (!currentUserStorageKey) {
+      setCurrentUserId("");
+      return;
+    }
+
+    try {
+      const stored = window.localStorage.getItem(currentUserStorageKey);
+      if (!stored) return;
+      const parsed = Number(stored);
+      if (Number.isFinite(parsed)) {
+        setCurrentUserId(parsed);
+      }
+    } catch {
+      // Ignore localStorage access issues in restricted environments.
+    }
+  }, [currentUserStorageKey]);
+
+  useEffect(() => {
+    if (members.length === 0) {
+      setCurrentUserId("");
+      return;
+    }
+
+    setCurrentUserId((prev) => {
+      if (prev !== "" && members.some((member) => member.id === prev)) {
+        return prev;
+      }
+      return members[0].id;
+    });
+  }, [members]);
+
+  useEffect(() => {
+    if (!currentUserStorageKey || currentUserId === "") return;
+
+    try {
+      window.localStorage.setItem(currentUserStorageKey, String(currentUserId));
+    } catch {
+      // Ignore localStorage access issues in restricted environments.
+    }
+  }, [currentUserStorageKey, currentUserId]);
+
+  useEffect(() => {
+    setSelectedLedgerExplanationUserId((prev) => {
+      if (ledgerExplanationEntries.length === 0) return "";
+      if (
+        prev !== "" &&
+        ledgerExplanationEntries.some((entry) => entry.userId === prev)
+      ) {
+        return prev;
+      }
+      if (
+        currentUserId !== "" &&
+        ledgerExplanationEntries.some((entry) => entry.userId === currentUserId)
+      ) {
+        return currentUserId;
+      }
+      return ledgerExplanationEntries[0].userId;
+    });
+  }, [ledgerExplanationEntries, currentUserId]);
 
   async function addMember() {
     if (!Number.isFinite(groupId) || groupId <= 0) return;
@@ -1167,14 +1271,6 @@ export default function GroupPage() {
         `/groups/${gid}/explanations/ledger`,
       );
       setLedgerExplanation(res);
-      const entries = getLedgerExplanationEntries(res);
-      setSelectedLedgerExplanationUserId((prev) => {
-        if (entries.length === 0) return "";
-        if (prev !== "" && entries.some((entry) => entry.userId === prev)) {
-          return prev;
-        }
-        return "";
-      });
     } catch (e: unknown) {
       setLedgerExplanationError(
         e instanceof Error ? e.message : "Failed to load ledger explanation",
@@ -2585,13 +2681,30 @@ export default function GroupPage() {
                 const label = member
                   ? getMemberName(member)
                   : `User #${entry.userId}`;
+                const explanation = ledgerExplanationByUserId.get(entry.userId);
+                const whyParts = explanation
+                  ? getLedgerWhyParts(explanation)
+                  : [];
+                const whyText = explanation
+                  ? whyParts.length > 0
+                    ? `Why: ${whyParts.join(" · ")}`
+                    : "Why: no detailed explanation breakdown."
+                  : loadingLedgerExplanation
+                    ? "Why: loading explanation..."
+                    : "Why: explanation not available yet.";
                 return (
                   <div
                     key={entry.userId}
-                    className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                    className="flex items-start justify-between rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
                   >
-                    <span className="font-medium text-slate-900">{label}</span>
+                    <div className="min-w-0 pr-3">
+                      <div className="font-medium text-slate-900">{label}</div>
+                      <div className="mt-1 text-xs text-slate-500">
+                        {whyText}
+                      </div>
+                    </div>
                     <span
+                      title={whyText}
                       className={
                         Number(entry.netBalance) >= 0
                           ? "text-emerald-700"
@@ -2646,32 +2759,56 @@ export default function GroupPage() {
             />
           )}
           {!loadingLedgerExplanation && !ledgerExplanationError && (
-            <div className="mt-4">
-              <label className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                Select group member
-              </label>
-              <select
-                className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
-                value={selectedLedgerExplanationUserId}
-                onChange={(e) =>
-                  setSelectedLedgerExplanationUserId(
-                    e.target.value ? Number(e.target.value) : "",
-                  )
-                }
-              >
-                <option value="">Select group member</option>
-                {ledgerExplanationEntries.map((entry) => {
-                  const member = members.find((m) => m.id === entry.userId);
-                  const label = member
-                    ? getMemberName(member)
-                    : `User #${entry.userId}`;
-                  return (
-                    <option key={entry.userId} value={entry.userId}>
-                      {label}
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                  Current user
+                </label>
+                <select
+                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                  value={currentUserId}
+                  onChange={(e) =>
+                    setCurrentUserId(e.target.value ? Number(e.target.value) : "")
+                  }
+                >
+                  <option value="">Select current user</option>
+                  {members.map((member) => (
+                    <option key={member.id} value={member.id}>
+                      {getMemberName(member)}
                     </option>
-                  );
-                })}
-              </select>
+                  ))}
+                </select>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Explain defaults to this member.
+                </p>
+              </div>
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                  Explain member
+                </label>
+                <select
+                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                  value={selectedLedgerExplanationUserId}
+                  onChange={(e) =>
+                    setSelectedLedgerExplanationUserId(
+                      e.target.value ? Number(e.target.value) : "",
+                    )
+                  }
+                >
+                  <option value="">Select group member</option>
+                  {ledgerExplanationEntries.map((entry) => {
+                    const member = members.find((m) => m.id === entry.userId);
+                    const label = member
+                      ? getMemberName(member)
+                      : `User #${entry.userId}`;
+                    return (
+                      <option key={entry.userId} value={entry.userId}>
+                        {label}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
             </div>
           )}
           {!loadingLedgerExplanation &&
