@@ -116,6 +116,7 @@ type PaginatedResponse<T> = {
 };
 
 type BannerVariant = "loading" | "empty" | "error" | "info";
+type GroupTab = "members" | "expenses" | "settle" | "explain" | "history";
 
 function StatusBanner({
   variant,
@@ -140,7 +141,9 @@ function StatusBanner({
   }[variant];
 
   return (
-    <div className={`mt-3 flex items-start justify-between gap-3 rounded-xl border px-3 py-2 text-sm ${styles}`}>
+    <div
+      className={`mt-3 flex items-start justify-between gap-3 rounded-xl border px-3 py-2 text-sm ${styles}`}
+    >
       <div className="flex items-start gap-2">
         <span aria-hidden="true">{icon}</span>
         <span>{message}</span>
@@ -273,16 +276,18 @@ export default function GroupPage() {
   const [settlementsError, setSettlementsError] = useState<string | null>(null);
   const [addExpenseError, setAddExpenseError] = useState<string | null>(null);
   const [confirmationId, setConfirmationId] = useState("");
-  const [confirmationIdError, setConfirmationIdError] =
-    useState<string | null>(null);
+  const [confirmationIdError, setConfirmationIdError] = useState<string | null>(
+    null,
+  );
   const [paidTransfers, setPaidTransfers] = useState<Set<string>>(
     () => new Set(),
   );
   const [confirmingTransfers, setConfirmingTransfers] = useState<Set<string>>(
     () => new Set(),
   );
-  const [confirmTransferError, setConfirmTransferError] =
-    useState<string | null>(null);
+  const [confirmTransferError, setConfirmTransferError] = useState<
+    string | null
+  >(null);
 
   const [editingExpenseId, setEditingExpenseId] = useState<number | null>(null);
   const [editDesc, setEditDesc] = useState("");
@@ -299,13 +304,15 @@ export default function GroupPage() {
   >({});
   const [editShares, setEditShares] = useState<Record<number, string>>({});
   const [updatingExpense, setUpdatingExpense] = useState(false);
-  const [updateExpenseError, setUpdateExpenseError] =
-    useState<string | null>(null);
+  const [updateExpenseError, setUpdateExpenseError] = useState<string | null>(
+    null,
+  );
   const [deletingExpenseId, setDeletingExpenseId] = useState<number | null>(
     null,
   );
-  const [deleteExpenseError, setDeleteExpenseError] =
-    useState<string | null>(null);
+  const [deleteExpenseError, setDeleteExpenseError] = useState<string | null>(
+    null,
+  );
 
   const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([]);
   const [loadingLedger, setLoadingLedger] = useState(false);
@@ -314,8 +321,9 @@ export default function GroupPage() {
     useState<LedgerExplanationResponse | null>(null);
   const [loadingLedgerExplanation, setLoadingLedgerExplanation] =
     useState(false);
-  const [ledgerExplanationError, setLedgerExplanationError] =
-    useState<string | null>(null);
+  const [ledgerExplanationError, setLedgerExplanationError] = useState<
+    string | null
+  >(null);
   const [selectedLedgerExplanationUserId, setSelectedLedgerExplanationUserId] =
     useState<number | "">("");
 
@@ -342,8 +350,9 @@ export default function GroupPage() {
     useState(defaultListSort);
   const [loadingConfirmedTransfers, setLoadingConfirmedTransfers] =
     useState(false);
-  const [confirmedTransfersError, setConfirmedTransfersError] =
-    useState<string | null>(null);
+  const [confirmedTransfersError, setConfirmedTransfersError] = useState<
+    string | null
+  >(null);
   const [confirmedFilter, setConfirmedFilter] = useState("");
 
   const [owesFromUserId, setOwesFromUserId] = useState<number | "">("");
@@ -357,9 +366,21 @@ export default function GroupPage() {
   );
   const [loadingOwes, setLoadingOwes] = useState(false);
   const [owesError, setOwesError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<GroupTab>("members");
 
   const cardClassName =
     "rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm backdrop-blur";
+  const tabs: Array<{ key: GroupTab; label: string }> = [
+    { key: "members", label: "Members" },
+    { key: "expenses", label: "Expenses" },
+    { key: "settle", label: "Settle" },
+    { key: "explain", label: "Explain" },
+    { key: "history", label: "History" },
+  ];
+
+  function getSectionClass(tab: GroupTab) {
+    return activeTab === tab ? cardClassName : `${cardClassName} hidden`;
+  }
 
   function getMemberName(member: Member) {
     return member.name?.trim() || "Member";
@@ -479,7 +500,8 @@ export default function GroupPage() {
 
   function getSplitUserId(split: unknown): number | null {
     if (!isRecord(split)) return null;
-    const raw = split.userId ?? split.user_id ?? split.memberId ?? split.member_id;
+    const raw =
+      split.userId ?? split.user_id ?? split.memberId ?? split.member_id;
     const id = Number(raw);
     return Number.isFinite(id) ? id : null;
   }
@@ -510,7 +532,10 @@ export default function GroupPage() {
     owesByUser.set(payerUserId, -amount);
 
     for (const [splitUserId, splitAmount] of shareByUser.entries()) {
-      owesByUser.set(splitUserId, (owesByUser.get(splitUserId) ?? 0) + splitAmount);
+      owesByUser.set(
+        splitUserId,
+        (owesByUser.get(splitUserId) ?? 0) + splitAmount,
+      );
     }
 
     return owesByUser;
@@ -770,20 +795,27 @@ export default function GroupPage() {
 
     const nested =
       (explanation.data && !Array.isArray(explanation.data)
-        ? getLedgerExplanationEntries(explanation.data as LedgerExplanationResponse)
+        ? getLedgerExplanationEntries(
+            explanation.data as LedgerExplanationResponse,
+          )
         : []) ||
       (explanation.result && !Array.isArray(explanation.result)
-        ? getLedgerExplanationEntries(explanation.result as LedgerExplanationResponse)
+        ? getLedgerExplanationEntries(
+            explanation.result as LedgerExplanationResponse,
+          )
         : []) ||
       (explanation.payload && !Array.isArray(explanation.payload)
-        ? getLedgerExplanationEntries(explanation.payload as LedgerExplanationResponse)
+        ? getLedgerExplanationEntries(
+            explanation.payload as LedgerExplanationResponse,
+          )
         : []);
     if (Array.isArray(nested) && nested.length > 0) return nested;
 
     // Support map-like responses: { "12": {...entry without userId...}, "34": {...} }
     const mapped = Object.entries(explanation)
       .filter(([key, value]) => {
-        if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+        if (!value || typeof value !== "object" || Array.isArray(value))
+          return false;
         return key !== "data" && key !== "result" && key !== "payload";
       })
       .map(([key, value]) => {
@@ -840,10 +872,7 @@ export default function GroupPage() {
     return bytes
       .map((b) => b.toString(16).padStart(2, "0"))
       .join("")
-      .replace(
-        /^(.{8})(.{4})(.{4})(.{4})(.{12})$/,
-        "$1-$2-$3-$4-$5",
-      );
+      .replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, "$1-$2-$3-$4-$5");
   }
 
   function buildMemberValueMap(
@@ -922,7 +951,7 @@ export default function GroupPage() {
       setGroupName(group.name ?? null);
     } catch (e: unknown) {
       const message =
-        e instanceof Error ? e.message ?? "Failed to load group" : String(e);
+        e instanceof Error ? (e.message ?? "Failed to load group") : String(e);
       setGroupError(message || "Failed to load group");
       setMembersError(message || "Failed to load group");
     } finally {
@@ -940,7 +969,9 @@ export default function GroupPage() {
 
     setLoadingLedgerExplanation(true);
     setLedgerExplanationError(null);
-    void api<LedgerExplanationResponse>(`/groups/${groupId}/explanations/ledger`)
+    void api<LedgerExplanationResponse>(
+      `/groups/${groupId}/explanations/ledger`,
+    )
       .then((res) => {
         setLedgerExplanation(res);
         const entries =
@@ -1004,7 +1035,8 @@ export default function GroupPage() {
     setEditShares((prev) => buildMemberValueMap(members, prev));
   }, [members]);
 
-  const ledgerExplanationEntries = getLedgerExplanationEntries(ledgerExplanation);
+  const ledgerExplanationEntries =
+    getLedgerExplanationEntries(ledgerExplanation);
 
   async function addMember() {
     if (!Number.isFinite(groupId) || groupId <= 0) return;
@@ -1128,9 +1160,7 @@ export default function GroupPage() {
       );
       setLedgerEntries(res.entries ?? []);
     } catch (e: unknown) {
-      setLedgerError(
-        e instanceof Error ? e.message : "Failed to load ledger",
-      );
+      setLedgerError(e instanceof Error ? e.message : "Failed to load ledger");
     } finally {
       setLoadingLedger(false);
     }
@@ -1195,9 +1225,7 @@ export default function GroupPage() {
           : 0,
       );
     } catch (e: unknown) {
-      setEventsError(
-        e instanceof Error ? e.message : "Failed to load events",
-      );
+      setEventsError(e instanceof Error ? e.message : "Failed to load events");
     } finally {
       setLoadingEvents(false);
     }
@@ -1528,13 +1556,10 @@ export default function GroupPage() {
         payload.percentages = percentageNumbers.map(formatAmount);
       }
 
-      await api<void>(
-        `/groups/${groupId}/expenses/${editingExpenseId}`,
-        {
-          method: "PATCH",
-          body: JSON.stringify(payload),
-        },
-      );
+      await api<void>(`/groups/${groupId}/expenses/${editingExpenseId}`, {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      });
       await Promise.all([
         loadExpenses(groupId),
         loadSettlements(groupId),
@@ -1588,555 +1613,176 @@ export default function GroupPage() {
   return (
     <main className="min-h-screen bg-gradient-to-br from-amber-50 via-rose-50 to-orange-50 p-6 text-slate-900">
       <div className="mx-auto flex max-w-3xl flex-col gap-6">
-      <Link href="/" className="text-sm font-medium text-slate-600 underline">
-        ← Back
-      </Link>
+        <Link href="/" className="text-sm font-medium text-slate-600 underline">
+          ← Back
+        </Link>
 
-      <div className="mt-2">
-        <h1 className="text-3xl font-semibold tracking-tight">
-          {groupName?.trim()
-            ? groupName
-            : `Group ${Number.isFinite(groupId) ? `#${groupId}` : ""}`}
-        </h1>
-        <p className="text-sm text-slate-600">
-          Add members first (then we’ll do expenses & settlements).
-        </p>
-      </div>
-
-      {groupError && (
-        <StatusBanner
-          variant="error"
-          message={groupError}
-          onRetry={() => Number.isFinite(groupId) && loadGroup(groupId)}
-        />
-      )}
-
-      <div className={cardClassName}>
-        <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-          Rename group
-        </h2>
-        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-          <input
-            className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none"
-            placeholder="Group name"
-            value={editingGroupName}
-            onChange={(e) => setEditingGroupName(e.target.value)}
-          />
-          <button
-            onClick={saveGroupName}
-            disabled={savingGroupName || !editingGroupName.trim()}
-            className="rounded-xl border border-slate-300 bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {savingGroupName ? "Saving..." : "Save"}
-          </button>
+        <div className="mt-2">
+          <h1 className="text-3xl font-semibold tracking-tight">
+            {groupName?.trim()
+              ? groupName
+              : `Group ${Number.isFinite(groupId) ? `#${groupId}` : ""}`}
+          </h1>
         </div>
-        {savingGroupName && (
-          <StatusBanner variant="loading" message="Saving group name..." />
-        )}
-        {renameGroupError && (
+
+        {groupError && (
           <StatusBanner
             variant="error"
-            message={renameGroupError}
-            onRetry={saveGroupName}
-          />
-        )}
-      </div>
-
-      <div className={cardClassName}>
-        <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-          Add a member
-        </h2>
-
-        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-          <input
-            className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none"
-            placeholder="e.g., Alice"
-            value={userName}
-            onChange={(e) => setUserName(e.target.value)}
-          />
-          <button
-            onClick={addMember}
-            disabled={
-              !userName.trim() || addingMember || !Number.isFinite(groupId)
-            }
-            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {addingMember ? "Adding..." : "Add"}
-          </button>
-        </div>
-        {addingMember && (
-          <StatusBanner variant="loading" message="Adding member..." />
-        )}
-        {addMemberError && (
-          <StatusBanner
-            variant="error"
-            message={addMemberError}
-            onRetry={addMember}
-          />
-        )}
-      </div>
-
-      <div className={cardClassName}>
-        <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-          Members
-        </h2>
-
-        {loadingMembers && (
-          <StatusBanner variant="loading" message="Loading members..." />
-        )}
-        {membersError && (
-          <StatusBanner
-            variant="error"
-            message={membersError}
+            message={groupError}
             onRetry={() => Number.isFinite(groupId) && loadGroup(groupId)}
           />
         )}
-        {!loadingMembers && !membersError && members.length === 0 && (
-          <StatusBanner
-            variant="empty"
-            message="No members yet. Add someone to get started."
-          />
-        )}
-        {!loadingMembers && !membersError && members.length > 0 && (
-          <div className="mt-4 max-h-56 overflow-y-auto pr-1">
-            <ul className="space-y-2">
-              {members.map((m) => (
-                <li
-                  key={m.id}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-2"
-                >
-                  <div className="text-sm font-medium text-slate-900">
-                    {getMemberName(m)}
-                  </div>
-                </li>
-              ))}
-            </ul>
+
+        <div className="rounded-2xl border border-slate-200 bg-white/80 p-2 shadow-sm backdrop-blur">
+          <div className="flex flex-wrap gap-2">
+            {tabs.map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveTab(tab.key)}
+                className={`rounded-xl border px-3 py-2 text-sm font-medium ${
+                  activeTab === tab.key
+                    ? "border-slate-900 bg-slate-900 text-white"
+                    : "border-slate-200 bg-white text-slate-700"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
-        )}
-      </div>
+        </div>
 
-      <div className={cardClassName}>
-        <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-          Add expense
-        </h2>
-
-        <div className="mt-3 grid grid-cols-1 gap-3">
-          <input
-            className="rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none"
-            placeholder="Description (e.g., Groceries)"
-            value={desc}
-            onChange={(e) => setDesc(e.target.value)}
-          />
-
-          <div className="flex flex-col gap-2 sm:flex-row">
+        <div className={getSectionClass("members")}>
+          <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+            Rename group
+          </h2>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
             <input
               className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none"
-              placeholder="Amount (e.g., 42.50)"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              inputMode="decimal"
+              placeholder="Group name"
+              value={editingGroupName}
+              onChange={(e) => setEditingGroupName(e.target.value)}
             />
-
-            <select
-              className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2"
-              value={paidByUserId}
-              onChange={(e) =>
-                setPaidByUserId(e.target.value ? Number(e.target.value) : "")
-              }
-            >
-              <option value="">Paid by...</option>
-              {members.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {getMemberName(m)}
-                </option>
-              ))}
-            </select>
-
             <button
-              onClick={addExpense}
-              disabled={
-                addingExpense ||
-                !desc.trim() ||
-                !amount ||
-                paidByUserId === "" ||
-                members.length === 0 ||
-                (splitMode === "exact" &&
-                  exactRemaining !== null &&
-                  Math.abs(exactRemaining) > 0.01)
-              }
+              onClick={saveGroupName}
+              disabled={savingGroupName || !editingGroupName.trim()}
               className="rounded-xl border border-slate-300 bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {addingExpense ? "Saving..." : "Add"}
+              {savingGroupName ? "Saving..." : "Save"}
             </button>
           </div>
-
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <select
-              className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2"
-              value={splitMode}
-              onChange={(e) =>
-                setSplitMode(
-                  e.target.value as "equal" | "exact" | "percentage" | "shares",
-                )
-              }
-            >
-              <option value="equal">Equal split</option>
-              <option value="exact">Exact amounts</option>
-              <option value="percentage">Percentages</option>
-              <option value="shares">Shares</option>
-            </select>
-          </div>
-
-          {splitMode === "exact" && (
-            <div className="rounded-xl border border-slate-200 bg-white p-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                Exact amounts
-              </p>
-              <p className="mt-2 text-xs text-slate-500">
-                {(() => {
-                  const remaining = getRemainingAmount(
-                    amount,
-                    exactAmounts,
-                    members.map((m) => m.id),
-                  );
-                  if (remaining === null) return "Enter a total amount first.";
-                  const label = remaining < 0 ? "Over by" : "Remaining";
-                  return `${label}: $${Math.abs(remaining).toFixed(2)}`;
-                })()}
-              </p>
-              <div className="mt-3 space-y-2">
-                {members.map((member) => (
-                  <div
-                    key={member.id}
-                    className="flex flex-col gap-2 sm:flex-row sm:items-center"
-                  >
-                    <span className="text-sm font-medium text-slate-900 sm:w-48">
-                      {getMemberName(member)}
-                    </span>
-                    <input
-                      className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
-                      placeholder="0.00"
-                      inputMode="decimal"
-                      value={exactAmounts[member.id] ?? ""}
-                      onChange={(e) =>
-                        setExactAmounts((prev) => ({
-                          ...prev,
-                          [member.id]: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
+          {savingGroupName && (
+            <StatusBanner variant="loading" message="Saving group name..." />
           )}
-
-          {splitMode === "percentage" && (
-            <div className="rounded-xl border border-slate-200 bg-white p-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                Percentages
-              </p>
-              <div className="mt-3 space-y-2">
-                {members.map((member) => (
-                  <div
-                    key={member.id}
-                    className="flex flex-col gap-2 sm:flex-row sm:items-center"
-                  >
-                    <span className="text-sm font-medium text-slate-900 sm:w-48">
-                      {getMemberName(member)}
-                    </span>
-                    <input
-                      className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
-                      placeholder="0"
-                      inputMode="decimal"
-                      value={percentages[member.id] ?? ""}
-                      onChange={(e) =>
-                        setPercentages((prev) => ({
-                          ...prev,
-                          [member.id]: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {splitMode === "shares" && (
-            <div className="rounded-xl border border-slate-200 bg-white p-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                Shares
-              </p>
-              <div className="mt-3 space-y-2">
-                {members.map((member) => (
-                  <div
-                    key={member.id}
-                    className="flex flex-col gap-2 sm:flex-row sm:items-center"
-                  >
-                    <span className="text-sm font-medium text-slate-900 sm:w-48">
-                      {getMemberName(member)}
-                    </span>
-                    <input
-                      className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
-                      placeholder="1"
-                      inputMode="numeric"
-                      value={shares[member.id] ?? ""}
-                      onChange={(e) =>
-                        setShares((prev) => ({
-                          ...prev,
-                          [member.id]: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
+          {renameGroupError && (
+            <StatusBanner
+              variant="error"
+              message={renameGroupError}
+              onRetry={saveGroupName}
+            />
           )}
         </div>
-        {addingExpense && (
-          <StatusBanner variant="loading" message="Adding expense..." />
-        )}
-        {addExpenseError && (
-          <StatusBanner
-            variant="error"
-            message={addExpenseError}
-            onRetry={addExpense}
-          />
-        )}
-      </div>
 
-      <div className={cardClassName}>
-        <div className="flex items-center justify-between gap-2">
+        <div className={getSectionClass("members")}>
           <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-            Expenses
+            Add a member
           </h2>
-          <div className="flex items-center gap-3 text-xs text-slate-600">
-            <div className="flex items-center gap-1">
-              <span>Date</span>
-              <button
-                className={`rounded border px-1 leading-none ${expensesSort === "createdAt,asc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
-                onClick={() => {
-                  setExpensesSort("createdAt,asc");
-                  if (Number.isFinite(groupId)) {
-                    void loadExpenses(groupId, 1, expensesPageSize, "createdAt,asc");
-                  }
-                }}
-                disabled={loadingExpenses}
-                aria-label="Sort expenses by date ascending"
-              >
-                ▲
-              </button>
-              <button
-                className={`rounded border px-1 leading-none ${expensesSort === "createdAt,desc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
-                onClick={() => {
-                  setExpensesSort("createdAt,desc");
-                  if (Number.isFinite(groupId)) {
-                    void loadExpenses(groupId, 1, expensesPageSize, "createdAt,desc");
-                  }
-                }}
-                disabled={loadingExpenses}
-                aria-label="Sort expenses by date descending"
-              >
-                ▼
-              </button>
-            </div>
-            <div className="flex items-center gap-1">
-              <span>Amount</span>
-              <button
-                className={`rounded border px-1 leading-none ${expensesSort === "amount,asc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
-                onClick={() => {
-                  setExpensesSort("amount,asc");
-                  if (Number.isFinite(groupId)) {
-                    void loadExpenses(groupId, 1, expensesPageSize, "amount,asc");
-                  }
-                }}
-                disabled={loadingExpenses}
-                aria-label="Sort expenses by amount ascending"
-              >
-                ▲
-              </button>
-              <button
-                className={`rounded border px-1 leading-none ${expensesSort === "amount,desc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
-                onClick={() => {
-                  setExpensesSort("amount,desc");
-                  if (Number.isFinite(groupId)) {
-                    void loadExpenses(groupId, 1, expensesPageSize, "amount,desc");
-                  }
-                }}
-                disabled={loadingExpenses}
-                aria-label="Sort expenses by amount descending"
-              >
-                ▼
-              </button>
-            </div>
+
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+            <input
+              className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none"
+              placeholder="e.g., Alice"
+              value={userName}
+              onChange={(e) => setUserName(e.target.value)}
+            />
+            <button
+              onClick={addMember}
+              disabled={
+                !userName.trim() || addingMember || !Number.isFinite(groupId)
+              }
+              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {addingMember ? "Adding..." : "Add"}
+            </button>
           </div>
+          {addingMember && (
+            <StatusBanner variant="loading" message="Adding member..." />
+          )}
+          {addMemberError && (
+            <StatusBanner
+              variant="error"
+              message={addMemberError}
+              onRetry={addMember}
+            />
+          )}
         </div>
 
-        {loadingExpenses && (
-          <StatusBanner variant="loading" message="Loading expenses..." />
-        )}
-        {expensesError && (
-          <StatusBanner
-            variant="error"
-            message={expensesError}
-            onRetry={() =>
-              Number.isFinite(groupId) && loadExpenses(groupId, expensesPage)
-            }
-          />
-        )}
-        {deleteExpenseError && (
-          <StatusBanner variant="error" message={deleteExpenseError} />
-        )}
-        {!loadingExpenses && !expensesError && expenses.length === 0 && (
-          <StatusBanner
-            variant="empty"
-            message="No expenses yet. Add the first one above."
-          />
-        )}
-        {!loadingExpenses && !expensesError && expenses.length > 0 && (
-          <div className="mt-4 max-h-72 overflow-y-auto pr-1">
-            <ul className="space-y-3">
-              {expenses.map((ex, index) => (
-                <li
-                  key={`${ex.expenseId ?? "new"}-${ex.payerUserId}-${ex.amount}-${ex.createdAt ?? index}`}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-3"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-medium text-slate-900">
-                        {ex.description}
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        Paid by{" "}
-                        {(() => {
-                          const member = members.find(
-                            (m) => m.id === ex.payerUserId,
-                          );
-                          return member
-                            ? getMemberName(member)
-                            : "Unknown member";
-                        })()}
-                      </div>
-                      {ex.splits && ex.splits.length > 0 && (
-                        <div className="mt-2 space-y-1 text-xs text-slate-500">
-                          {ex.splits.map((split) => {
-                            const member = members.find(
-                              (m) => m.id === split.userId,
-                            );
-                            const label = member
-                              ? getMemberName(member)
-                              : `User #${split.userId}`;
-                            return (
-                              <div key={`${ex.expenseId}-${split.userId}`}>
-                                {label}: ${Number(split.shareAmount).toFixed(2)}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex flex-col items-end gap-2">
-                      <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-sm font-semibold">
-                        ${Number(ex.amount).toFixed(2)}
-                      </div>
-                      <div className="flex items-center gap-2 text-xs">
-                        <button
-                          type="button"
-                          className="underline"
-                          onClick={() => startEditExpense(ex)}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          className="text-rose-600 underline"
-                          disabled={deletingExpenseId === ex.expenseId}
-                          onClick={() => deleteExpense(ex.expenseId)}
-                        >
-                          {deletingExpenseId === ex.expenseId
-                            ? "Deleting..."
-                            : "Delete"}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {!loadingExpenses && !expensesError && expensesTotalItems > 0 && (
-          <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
-            <span>
-              Page {expensesPage} of {expensesTotalPages} ({expensesTotalItems} expenses)
-            </span>
-            <div className="flex items-center gap-3">
-              <label className="flex items-center gap-2">
-                <span>Page size</span>
-                <select
-                  className="rounded-xl border border-slate-300 bg-white px-2 py-1"
-                  value={expensesPageSize}
-                  onChange={(e) => {
-                    const nextSize = Number(e.target.value);
-                    setExpensesPageSize(nextSize);
-                    if (Number.isFinite(groupId)) {
-                      void loadExpenses(groupId, 1, nextSize);
-                    }
-                  }}
-                  disabled={loadingExpenses}
-                >
-                  {[5, 10, 25, 50, 100].map((size) => (
-                    <option key={size} value={size}>
-                      {size}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <PaginationControls
-                currentPage={expensesPage}
-                totalPages={expensesTotalPages}
-                loading={loadingExpenses}
-                onPageChange={(page) =>
-                  Number.isFinite(groupId) && void loadExpenses(groupId, page)
-                }
-              />
-            </div>
-          </div>
-        )}
-      </div>
-
-      {editingExpenseId !== null && (
-        <div className={cardClassName}>
+        <div className={getSectionClass("members")}>
           <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-            Update expense
+            Members
+          </h2>
+
+          {loadingMembers && (
+            <StatusBanner variant="loading" message="Loading members..." />
+          )}
+          {membersError && (
+            <StatusBanner
+              variant="error"
+              message={membersError}
+              onRetry={() => Number.isFinite(groupId) && loadGroup(groupId)}
+            />
+          )}
+          {!loadingMembers && !membersError && members.length === 0 && (
+            <StatusBanner
+              variant="empty"
+              message="No members yet. Add someone to get started."
+            />
+          )}
+          {!loadingMembers && !membersError && members.length > 0 && (
+            <div className="mt-4 max-h-56 overflow-y-auto pr-1">
+              <ul className="space-y-2">
+                {members.map((m) => (
+                  <li
+                    key={m.id}
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-2"
+                  >
+                    <div className="text-sm font-medium text-slate-900">
+                      {getMemberName(m)}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+
+        <div className={getSectionClass("expenses")}>
+          <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+            Add expense
           </h2>
 
           <div className="mt-3 grid grid-cols-1 gap-3">
             <input
               className="rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none"
-              placeholder="Description"
-              value={editDesc}
-              onChange={(e) => setEditDesc(e.target.value)}
+              placeholder="Description (e.g., Groceries)"
+              value={desc}
+              onChange={(e) => setDesc(e.target.value)}
             />
 
             <div className="flex flex-col gap-2 sm:flex-row">
               <input
                 className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none"
                 placeholder="Amount (e.g., 42.50)"
-                value={editAmount}
-                onChange={(e) => setEditAmount(e.target.value)}
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
                 inputMode="decimal"
               />
 
               <select
                 className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2"
-                value={editPaidByUserId}
+                value={paidByUserId}
                 onChange={(e) =>
-                  setEditPaidByUserId(
-                    e.target.value ? Number(e.target.value) : "",
-                  )
+                  setPaidByUserId(e.target.value ? Number(e.target.value) : "")
                 }
               >
                 <option value="">Paid by...</option>
@@ -2148,33 +1794,29 @@ export default function GroupPage() {
               </select>
 
               <button
-                onClick={updateExpense}
+                onClick={addExpense}
                 disabled={
-                  updatingExpense ||
-                  !editDesc.trim() ||
-                  !editAmount ||
-                  editPaidByUserId === "" ||
-                  members.length === 0
+                  addingExpense ||
+                  !desc.trim() ||
+                  !amount ||
+                  paidByUserId === "" ||
+                  members.length === 0 ||
+                  (splitMode === "exact" &&
+                    exactRemaining !== null &&
+                    Math.abs(exactRemaining) > 0.01)
                 }
                 className="rounded-xl border border-slate-300 bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {updatingExpense ? "Updating..." : "Save"}
-              </button>
-              <button
-                onClick={resetEditExpense}
-                disabled={updatingExpense}
-                className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Cancel
+                {addingExpense ? "Saving..." : "Add"}
               </button>
             </div>
 
             <div className="flex flex-col gap-2 sm:flex-row">
               <select
                 className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2"
-                value={editSplitMode}
+                value={splitMode}
                 onChange={(e) =>
-                  setEditSplitMode(
+                  setSplitMode(
                     e.target.value as
                       | "equal"
                       | "exact"
@@ -2190,7 +1832,7 @@ export default function GroupPage() {
               </select>
             </div>
 
-            {editSplitMode === "exact" && (
+            {splitMode === "exact" && (
               <div className="rounded-xl border border-slate-200 bg-white p-3">
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
                   Exact amounts
@@ -2198,13 +1840,12 @@ export default function GroupPage() {
                 <p className="mt-2 text-xs text-slate-500">
                   {(() => {
                     const remaining = getRemainingAmount(
-                      editAmount,
-                      editExactAmounts,
+                      amount,
+                      exactAmounts,
                       members.map((m) => m.id),
                     );
-                    if (remaining === null) {
+                    if (remaining === null)
                       return "Enter a total amount first.";
-                    }
                     const label = remaining < 0 ? "Over by" : "Remaining";
                     return `${label}: $${Math.abs(remaining).toFixed(2)}`;
                   })()}
@@ -2222,9 +1863,9 @@ export default function GroupPage() {
                         className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
                         placeholder="0.00"
                         inputMode="decimal"
-                        value={editExactAmounts[member.id] ?? ""}
+                        value={exactAmounts[member.id] ?? ""}
                         onChange={(e) =>
-                          setEditExactAmounts((prev) => ({
+                          setExactAmounts((prev) => ({
                             ...prev,
                             [member.id]: e.target.value,
                           }))
@@ -2236,7 +1877,7 @@ export default function GroupPage() {
               </div>
             )}
 
-            {editSplitMode === "percentage" && (
+            {splitMode === "percentage" && (
               <div className="rounded-xl border border-slate-200 bg-white p-3">
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
                   Percentages
@@ -2254,9 +1895,9 @@ export default function GroupPage() {
                         className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
                         placeholder="0"
                         inputMode="decimal"
-                        value={editPercentages[member.id] ?? ""}
+                        value={percentages[member.id] ?? ""}
                         onChange={(e) =>
-                          setEditPercentages((prev) => ({
+                          setPercentages((prev) => ({
                             ...prev,
                             [member.id]: e.target.value,
                           }))
@@ -2268,7 +1909,7 @@ export default function GroupPage() {
               </div>
             )}
 
-            {editSplitMode === "shares" && (
+            {splitMode === "shares" && (
               <div className="rounded-xl border border-slate-200 bg-white p-3">
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
                   Shares
@@ -2286,9 +1927,9 @@ export default function GroupPage() {
                         className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
                         placeholder="1"
                         inputMode="numeric"
-                        value={editShares[member.id] ?? ""}
+                        value={shares[member.id] ?? ""}
                         onChange={(e) =>
-                          setEditShares((prev) => ({
+                          setShares((prev) => ({
                             ...prev,
                             [member.id]: e.target.value,
                           }))
@@ -2300,727 +1941,59 @@ export default function GroupPage() {
               </div>
             )}
           </div>
-          {updatingExpense && (
-            <StatusBanner variant="loading" message="Updating expense..." />
+          {addingExpense && (
+            <StatusBanner variant="loading" message="Adding expense..." />
           )}
-          {updateExpenseError && (
+          {addExpenseError && (
             <StatusBanner
               variant="error"
-              message={updateExpenseError}
-              onRetry={updateExpense}
+              message={addExpenseError}
+              onRetry={addExpense}
             />
           )}
         </div>
-      )}
 
-      <div className={cardClassName}>
-        <div className="flex items-center justify-between">
-          <div>
+        <div className={getSectionClass("expenses")}>
+          <div className="flex items-center justify-between gap-2">
             <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-              Settle up
+              Expenses
             </h2>
-            <p className="mt-1 text-xs text-slate-500">
-              Suggested transfers to square everyone up.
-            </p>
-          </div>
-          <button
-            className="text-xs font-medium text-slate-600 underline"
-            onClick={() => Number.isFinite(groupId) && loadSettlements(groupId)}
-            disabled={loadingSettlements}
-          >
-            {loadingSettlements ? "Refreshing..." : "Refresh"}
-          </button>
-        </div>
-
-        <div className="mt-3">
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <input
-              className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
-              placeholder="Confirmation ID (optional)"
-              value={confirmationId}
-              onChange={(e) => setConfirmationId(e.target.value)}
-            />
-            <button
-              type="button"
-              className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700"
-              onClick={generateConfirmationIdFromApi}
-            >
-              Generate ID
-            </button>
-          </div>
-          <p className="mt-1 text-xs text-slate-500">
-            Use a confirmation ID to make transfer confirmations idempotent.
-          </p>
-        </div>
-
-        {confirmationIdError && (
-          <StatusBanner
-            variant="error"
-            message={confirmationIdError}
-            onRetry={generateConfirmationIdFromApi}
-          />
-        )}
-        {confirmTransferError && (
-          <StatusBanner variant="error" message={confirmTransferError} />
-        )}
-        {loadingSettlements && (
-          <StatusBanner variant="loading" message="Loading settlements..." />
-        )}
-        {settlementsError && (
-          <StatusBanner
-            variant="error"
-            message={settlementsError}
-            onRetry={() => Number.isFinite(groupId) && loadSettlements(groupId)}
-          />
-        )}
-        {!loadingSettlements && !settlementsError && settlements.length === 0 && (
-          <StatusBanner variant="empty" message="No transfers needed right now." />
-        )}
-        {!loadingSettlements && !settlementsError && settlements.length > 0 && (
-          (() => {
-            const sortedTransfers = [...settlements].sort((a, b) => {
-              if (a.fromUserId !== b.fromUserId) {
-                return a.fromUserId - b.fromUserId;
-              }
-              if (a.toUserId !== b.toUserId) {
-                return a.toUserId - b.toUserId;
-              }
-              return Number(a.amount) - Number(b.amount);
-            });
-
-            return (
-          <div className="mt-4 max-h-80 overflow-y-auto pr-1">
-            <ul className="space-y-3">
-              {sortedTransfers.map((s) => {
-                const fromMember = members.find((m) => m.id === s.fromUserId);
-                const toMember = members.find((m) => m.id === s.toUserId);
-                const fromLabel = fromMember
-                  ? getMemberName(fromMember)
-                  : "Unknown member";
-                const toLabel = toMember
-                  ? getMemberName(toMember)
-                  : "Unknown member";
-                const transferKey = getTransferKey(s);
-                const isPaid = paidTransfers.has(transferKey);
-                return (
-                  <li
-                    key={transferKey}
-                    className={`rounded-xl border px-3 py-3 ${
-                      isPaid
-                        ? "border-emerald-200 bg-emerald-50/60"
-                        : "border-slate-200 bg-white"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex flex-col gap-1 text-sm">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs uppercase tracking-wide text-slate-500">
-                            Transfer
-                          </span>
-                          {isPaid && (
-                            <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
-                              Confirmed
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-sm font-medium text-slate-900">
-                          <span className="text-rose-700">{fromLabel}</span>{" "}
-                          pays{" "}
-                          <span className="text-emerald-700">{toLabel}</span>
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-sm font-semibold">
-                          ${Number(s.amount).toFixed(2)}
-                        </span>
-                        <button
-                          type="button"
-                          className={`rounded-full border px-3 py-1 text-xs font-medium ${
-                            isPaid
-                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                              : "border-slate-200 bg-white text-slate-600"
-                          }`}
-                          onClick={() => confirmPaidTransfer(s)}
-                          disabled={
-                            isPaid || confirmingTransfers.has(transferKey)
-                          }
-                        >
-                          {confirmingTransfers.has(transferKey)
-                            ? "Confirming..."
-                            : isPaid
-                              ? "Confirmed"
-                              : "Mark paid"}
-                        </button>
-                        <button
-                          type="button"
-                          className="text-xs font-medium text-slate-600 underline"
-                          onClick={() =>
-                            navigator.clipboard.writeText(
-                              `${fromLabel} pays ${toLabel} $${Number(s.amount).toFixed(2)}`
-                            )
-                          }
-                        >
-                          Copy
-                        </button>
-                      </div>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-            );
-          })()
-        )}
-      </div>
-
-      <div className={cardClassName}>
-        <div className="flex items-center justify-between">
-          <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-            Ledger
-          </h2>
-          <button
-            className="text-xs font-medium text-slate-600 underline"
-            onClick={() => Number.isFinite(groupId) && loadLedger(groupId)}
-            disabled={loadingLedger}
-          >
-            {loadingLedger ? "Refreshing..." : "Refresh"}
-          </button>
-        </div>
-
-        {loadingLedger && (
-          <StatusBanner variant="loading" message="Loading ledger..." />
-        )}
-        {ledgerError && (
-          <StatusBanner
-            variant="error"
-            message={ledgerError}
-            onRetry={() => Number.isFinite(groupId) && loadLedger(groupId)}
-          />
-        )}
-        {!loadingLedger && !ledgerError && ledgerEntries.length === 0 && (
-          <StatusBanner variant="empty" message="No ledger entries yet." />
-        )}
-        {!loadingLedger && !ledgerError && ledgerEntries.length > 0 && (
-          <div className="mt-4 space-y-2">
-            {ledgerEntries.map((entry) => {
-              const member = members.find((m) => m.id === entry.userId);
-              const label = member
-                ? getMemberName(member)
-                : `User #${entry.userId}`;
-              return (
-                <div
-                  key={entry.userId}
-                  className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
-                >
-                  <span className="font-medium text-slate-900">{label}</span>
-                  <span
-                    className={
-                      Number(entry.netBalance) >= 0
-                        ? "text-emerald-700"
-                        : "text-rose-700"
-                    }
-                  >
-                    {Number(entry.netBalance) >= 0 ? "+" : "-"}$
-                    {Math.abs(Number(entry.netBalance)).toFixed(2)}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      <div className={cardClassName}>
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-              Ledger explanation
-            </h2>
-            <p className="mt-1 text-xs text-slate-500">
-              See which expenses and transfers drive each member's balance.
-            </p>
-          </div>
-          <button
-            className="text-xs font-medium text-slate-600 underline"
-            onClick={() =>
-              Number.isFinite(groupId) && loadLedgerExplanation(groupId)
-            }
-            disabled={loadingLedgerExplanation}
-          >
-            {loadingLedgerExplanation ? "Explaining..." : "Explain"}
-          </button>
-        </div>
-
-        {loadingLedgerExplanation && (
-          <StatusBanner
-            variant="loading"
-            message="Loading ledger explanation..."
-          />
-        )}
-        {ledgerExplanationError && (
-          <StatusBanner
-            variant="error"
-            message={ledgerExplanationError}
-            onRetry={() =>
-              Number.isFinite(groupId) && loadLedgerExplanation(groupId)
-            }
-          />
-        )}
-        {!loadingLedgerExplanation && !ledgerExplanationError && (
-          <div className="mt-4">
-            <label className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-              Select group member
-            </label>
-            <select
-              className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
-              value={selectedLedgerExplanationUserId}
-              onChange={(e) =>
-                setSelectedLedgerExplanationUserId(
-                  e.target.value ? Number(e.target.value) : "",
-                )
-              }
-            >
-              <option value="">Select group member</option>
-              {ledgerExplanationEntries.map((entry) => {
-                const member = members.find((m) => m.id === entry.userId);
-                const label = member
-                  ? getMemberName(member)
-                  : `User #${entry.userId}`;
-                return (
-                  <option key={entry.userId} value={entry.userId}>
-                    {label}
-                  </option>
-                );
-              })}
-            </select>
-          </div>
-        )}
-        {!loadingLedgerExplanation &&
-          !ledgerExplanationError &&
-          ledgerExplanationEntries.length === 0 && (
-            <StatusBanner
-              variant="empty"
-              message="No explanation data yet."
-            />
-          )}
-        {!loadingLedgerExplanation &&
-          !ledgerExplanationError &&
-          ledgerExplanationEntries.length > 0 &&
-          selectedLedgerExplanationUserId === "" && (
-            <StatusBanner
-              variant="info"
-              message="Select group member to view explanation."
-            />
-          )}
-        {!loadingLedgerExplanation &&
-          !ledgerExplanationError &&
-          ledgerExplanationEntries.length > 0 &&
-          selectedLedgerExplanationUserId !== "" && (
-            <div className="mt-4 space-y-4">
-              {ledgerExplanationEntries
-                .filter(
-                  (entry) =>
-                    entry.userId === selectedLedgerExplanationUserId,
-                )
-                .map((entry) => {
-                const member = members.find((m) => m.id === entry.userId);
-                const label = member
-                  ? getMemberName(member)
-                  : `User #${entry.userId}`;
-                const netValue = Number(entry.netBalance ?? "");
-                const netLabel = Number.isFinite(netValue)
-                  ? `${netValue >= 0 ? "+" : "-"}$${Math.abs(netValue).toFixed(
-                      2,
-                    )}`
-                  : entry.netBalance ?? "—";
-                const netClass = Number.isFinite(netValue)
-                  ? netValue >= 0
-                    ? "text-emerald-700"
-                    : "text-rose-700"
-                  : "text-slate-600";
-                const expenses =
-                  entry.expenses ?? entry.contributingExpenses ?? [];
-                const transfersIn = entry.transfersIn ?? [];
-                const transfersOut = entry.transfersOut ?? [];
-                const transfers =
-                  entry.transfers ?? entry.contributingTransfers ?? [];
-                const contributions = entry.contributions ?? [];
-                const showDirectionalTransfers =
-                  transfersIn.length > 0 || transfersOut.length > 0;
-
-                return (
-                  <div
-                    key={entry.userId}
-                    className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="font-medium text-slate-900">
-                          {label}
-                        </div>
-                        <div className="text-xs text-slate-500">
-                          Net balance
-                        </div>
-                      </div>
-                      <span className={netClass}>{netLabel}</span>
-                    </div>
-
-                    {expenses.length > 0 && (
-                      <div className="mt-3">
-                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                          Expenses
-                        </div>
-                        <div className="mt-2 space-y-2">
-                          {expenses.map((expense) => {
-                            const payer = members.find(
-                              (m) => m.id === expense.payerUserId,
-                            );
-                            const payerLabel = payer
-                              ? getMemberName(payer)
-                              : expense.payerUserId
-                                ? `User #${expense.payerUserId}`
-                                : "Unknown payer";
-                            return (
-                              <div
-                                key={`${entry.userId}-${expense.expenseId ?? expense.description}`}
-                                className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2"
-                              >
-                                <div className="flex items-start justify-between gap-3">
-                                  <div>
-                                    <div className="font-medium text-slate-900">
-                                      {expense.description ?? "Expense"}
-                                    </div>
-                                    <div className="text-xs text-slate-500">
-                                      Paid by {payerLabel}
-                                    </div>
-                                  </div>
-                                  <span className="text-xs font-semibold text-slate-700">
-                                    {formatMoney(expense.amount)}
-                                  </span>
-                                </div>
-                                {expense.splits &&
-                                  expense.splits.length > 0 && (
-                                    <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-600">
-                                      {expense.splits.map((split) => {
-                                        const splitMember = members.find(
-                                          (m) => m.id === split.userId,
-                                        );
-                                        const splitLabel = splitMember
-                                          ? getMemberName(splitMember)
-                                          : `User #${split.userId}`;
-                                        return (
-                                          <span
-                                            key={`${entry.userId}-${expense.expenseId}-${split.userId}`}
-                                            className="rounded-full border border-slate-200 bg-white px-2 py-1"
-                                          >
-                                            {splitLabel}{" "}
-                                            {formatMoney(split.shareAmount)}
-                                          </span>
-                                        );
-                                      })}
-                                    </div>
-                                  )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {(showDirectionalTransfers || transfers.length > 0) && (
-                      <div className="mt-3">
-                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                          Transfers
-                        </div>
-                        {showDirectionalTransfers ? (
-                          <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                            {transfersIn.length > 0 && (
-                              <div className="space-y-2">
-                                <div className="text-[11px] font-medium text-emerald-700">
-                                  Incoming
-                                </div>
-                                {transfersIn.map((transfer) => {
-                                  const fromMember = members.find(
-                                    (m) => m.id === transfer.fromUserId,
-                                  );
-                                  const fromLabel = fromMember
-                                    ? getMemberName(fromMember)
-                                    : `User #${transfer.fromUserId}`;
-                                  return (
-                                    <div
-                                      key={`${entry.userId}-in-${transfer.fromUserId}-${transfer.toUserId}-${transfer.amount}`}
-                                      className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2"
-                                    >
-                                      <div className="flex items-center justify-between gap-2">
-                                        <span className="text-xs text-slate-600">
-                                          {fromLabel} → {label}
-                                        </span>
-                                        <span className="text-xs font-semibold text-emerald-700">
-                                          {formatMoney(transfer.amount)}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            )}
-                            {transfersOut.length > 0 && (
-                              <div className="space-y-2">
-                                <div className="text-[11px] font-medium text-rose-700">
-                                  Outgoing
-                                </div>
-                                {transfersOut.map((transfer) => {
-                                  const toMember = members.find(
-                                    (m) => m.id === transfer.toUserId,
-                                  );
-                                  const toLabel = toMember
-                                    ? getMemberName(toMember)
-                                    : `User #${transfer.toUserId}`;
-                                  return (
-                                    <div
-                                      key={`${entry.userId}-out-${transfer.fromUserId}-${transfer.toUserId}-${transfer.amount}`}
-                                      className="rounded-lg border border-rose-100 bg-rose-50 px-3 py-2"
-                                    >
-                                      <div className="flex items-center justify-between gap-2">
-                                        <span className="text-xs text-slate-600">
-                                          {label} → {toLabel}
-                                        </span>
-                                        <span className="text-xs font-semibold text-rose-700">
-                                          {formatMoney(transfer.amount)}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="mt-2 space-y-2">
-                            {transfers.map((transfer) => {
-                              const fromMember = members.find(
-                                (m) => m.id === transfer.fromUserId,
-                              );
-                              const toMember = members.find(
-                                (m) => m.id === transfer.toUserId,
-                              );
-                              const fromLabel = fromMember
-                                ? getMemberName(fromMember)
-                                : `User #${transfer.fromUserId}`;
-                              const toLabel = toMember
-                                ? getMemberName(toMember)
-                                : `User #${transfer.toUserId}`;
-                              return (
-                                <div
-                                  key={`${entry.userId}-${transfer.fromUserId}-${transfer.toUserId}-${transfer.amount}`}
-                                  className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2"
-                                >
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className="text-xs text-slate-600">
-                                      {fromLabel} → {toLabel}
-                                    </span>
-                                    <span className="text-xs font-semibold text-slate-700">
-                                      {formatMoney(transfer.amount)}
-                                    </span>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {contributions.length > 0 && (
-                      <div className="mt-3">
-                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                          Contributions
-                        </div>
-                        <div className="mt-2 space-y-2">
-                          {contributions.map((contribution, index) => (
-                            <div
-                              key={`${entry.userId}-${contribution.referenceId ?? index}-${contribution.type ?? "contribution"}`}
-                              className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2"
-                            >
-                              <div className="flex items-start justify-between gap-2">
-                                <div>
-                                  <div className="text-xs font-medium text-slate-900">
-                                    {contribution.type
-                                      ? contribution.type
-                                          .toLowerCase()
-                                          .replace(/_/g, " ")
-                                          .replace(/\b\w/g, (c) =>
-                                            c.toUpperCase(),
-                                          )
-                                      : "Contribution"}
-                                  </div>
-                                  <div className="text-xs text-slate-600">
-                                    {formatContributionDescription(
-                                      contribution.description,
-                                    )}
-                                  </div>
-                                </div>
-                                <span className="text-xs font-semibold text-slate-700">
-                                  {formatMoney(contribution.amount)}
-                                </span>
-                              </div>
-                              {contribution.timestamp && (
-                                <div className="mt-1 text-[11px] text-slate-500">
-                                  {new Date(contribution.timestamp).toLocaleString()} (
-                                  {getShortTimeZoneLabel(contribution.timestamp)})
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-      </div>
-
-      <div className={cardClassName}>
-        <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-          Owes lookup
-        </h2>
-        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-          <select
-            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
-            value={owesFromUserId}
-            onChange={(e) =>
-              setOwesFromUserId(e.target.value ? Number(e.target.value) : "")
-            }
-          >
-            <option value="">From user...</option>
-            {members
-              .filter((m) => m.id !== owesToUserId)
-              .map((m) => (
-              <option key={m.id} value={m.id}>
-                {getMemberName(m)}
-              </option>
-              ))}
-          </select>
-          <select
-            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
-            value={owesToUserId}
-            onChange={(e) =>
-              setOwesToUserId(e.target.value ? Number(e.target.value) : "")
-            }
-          >
-            <option value="">To user...</option>
-            {members
-              .filter((m) => m.id !== owesFromUserId)
-              .map((m) => (
-              <option key={m.id} value={m.id}>
-                {getMemberName(m)}
-              </option>
-              ))}
-          </select>
-          <div className="flex gap-2">
-            <button
-              className="flex-1 rounded-xl border border-slate-300 bg-slate-900 px-3 py-2 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={
-                loadingOwes ||
-                owesFromUserId === "" ||
-                owesToUserId === "" ||
-                owesFromUserId === owesToUserId
-              }
-              onClick={() => Number.isFinite(groupId) && loadOwes(groupId)}
-            >
-              Current
-            </button>
-            <button
-              className="flex-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={
-                loadingOwes ||
-                owesFromUserId === "" ||
-                owesToUserId === "" ||
-                owesFromUserId === owesToUserId
-              }
-              onClick={() =>
-                Number.isFinite(groupId) && loadOwesHistorical(groupId)
-              }
-            >
-              Historical
-            </button>
-          </div>
-        </div>
-        <div className="mt-3 text-sm text-slate-600">
-          {loadingOwes && (
-            <StatusBanner variant="loading" message="Loading owes..." />
-          )}
-          {owesError && (
-            <StatusBanner
-              variant="error"
-              message={owesError}
-              onRetry={() =>
-                Number.isFinite(groupId) &&
-                (owesView === "historical"
-                  ? loadOwesHistorical(groupId)
-                  : loadOwes(groupId))
-              }
-            />
-          )}
-          {!loadingOwes &&
-            !owesError &&
-            owesAmount === null &&
-            owesHistoricalAmount === null && (
-              <StatusBanner
-                variant="empty"
-                message="Select two members to see what’s owed."
-              />
-            )}
-          {!loadingOwes &&
-            !owesError &&
-            owesView === "current" &&
-            owesAmount !== null && (
-            <div>Current owes: ${owesAmount.toFixed(2)}</div>
-          )}
-          {!loadingOwes &&
-            !owesError &&
-            owesView === "historical" &&
-            owesHistoricalAmount !== null && (
-            <div>Historical owes: ${owesHistoricalAmount.toFixed(2)}</div>
-          )}
-        </div>
-      </div>
-
-      <div className={cardClassName}>
-        <div className="flex items-center justify-between">
-          <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-            Confirmed transfers
-          </h2>
-          <div className="flex items-center gap-2">
             <div className="flex items-center gap-3 text-xs text-slate-600">
               <div className="flex items-center gap-1">
                 <span>Date</span>
                 <button
-                  className={`rounded border px-1 leading-none ${confirmedTransfersSort === "createdAt,asc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
+                  className={`rounded border px-1 leading-none ${expensesSort === "createdAt,asc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
                   onClick={() => {
-                    setConfirmedTransfersSort("createdAt,asc");
+                    setExpensesSort("createdAt,asc");
                     if (Number.isFinite(groupId)) {
-                      void loadConfirmedTransfers(groupId, 1, confirmedTransfersPageSize, "createdAt,asc");
+                      void loadExpenses(
+                        groupId,
+                        1,
+                        expensesPageSize,
+                        "createdAt,asc",
+                      );
                     }
                   }}
-                  disabled={loadingConfirmedTransfers}
-                  aria-label="Sort confirmed transfers by date ascending"
+                  disabled={loadingExpenses}
+                  aria-label="Sort expenses by date ascending"
                 >
                   ▲
                 </button>
                 <button
-                  className={`rounded border px-1 leading-none ${confirmedTransfersSort === "createdAt,desc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
+                  className={`rounded border px-1 leading-none ${expensesSort === "createdAt,desc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
                   onClick={() => {
-                    setConfirmedTransfersSort("createdAt,desc");
+                    setExpensesSort("createdAt,desc");
                     if (Number.isFinite(groupId)) {
-                      void loadConfirmedTransfers(groupId, 1, confirmedTransfersPageSize, "createdAt,desc");
+                      void loadExpenses(
+                        groupId,
+                        1,
+                        expensesPageSize,
+                        "createdAt,desc",
+                      );
                     }
                   }}
-                  disabled={loadingConfirmedTransfers}
-                  aria-label="Sort confirmed transfers by date descending"
+                  disabled={loadingExpenses}
+                  aria-label="Sort expenses by date descending"
                 >
                   ▼
                 </button>
@@ -3028,139 +2001,159 @@ export default function GroupPage() {
               <div className="flex items-center gap-1">
                 <span>Amount</span>
                 <button
-                  className={`rounded border px-1 leading-none ${confirmedTransfersSort === "amount,asc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
+                  className={`rounded border px-1 leading-none ${expensesSort === "amount,asc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
                   onClick={() => {
-                    setConfirmedTransfersSort("amount,asc");
+                    setExpensesSort("amount,asc");
                     if (Number.isFinite(groupId)) {
-                      void loadConfirmedTransfers(groupId, 1, confirmedTransfersPageSize, "amount,asc");
+                      void loadExpenses(
+                        groupId,
+                        1,
+                        expensesPageSize,
+                        "amount,asc",
+                      );
                     }
                   }}
-                  disabled={loadingConfirmedTransfers}
-                  aria-label="Sort confirmed transfers by amount ascending"
+                  disabled={loadingExpenses}
+                  aria-label="Sort expenses by amount ascending"
                 >
                   ▲
                 </button>
                 <button
-                  className={`rounded border px-1 leading-none ${confirmedTransfersSort === "amount,desc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
+                  className={`rounded border px-1 leading-none ${expensesSort === "amount,desc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
                   onClick={() => {
-                    setConfirmedTransfersSort("amount,desc");
+                    setExpensesSort("amount,desc");
                     if (Number.isFinite(groupId)) {
-                      void loadConfirmedTransfers(groupId, 1, confirmedTransfersPageSize, "amount,desc");
+                      void loadExpenses(
+                        groupId,
+                        1,
+                        expensesPageSize,
+                        "amount,desc",
+                      );
                     }
                   }}
-                  disabled={loadingConfirmedTransfers}
-                  aria-label="Sort confirmed transfers by amount descending"
+                  disabled={loadingExpenses}
+                  aria-label="Sort expenses by amount descending"
                 >
                   ▼
                 </button>
               </div>
             </div>
-            <button
-              className="text-xs font-medium text-slate-600 underline"
-              onClick={() =>
-                Number.isFinite(groupId) &&
-                loadConfirmedTransfers(groupId, confirmedTransfersPage)
-              }
-              disabled={loadingConfirmedTransfers}
-            >
-              {loadingConfirmedTransfers ? "Refreshing..." : "Refresh"}
-            </button>
           </div>
-        </div>
 
-        <input
-          className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
-          placeholder="Filter by confirmation ID (optional)"
-          value={confirmedFilter}
-          onChange={(e) => setConfirmedFilter(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && Number.isFinite(groupId)) {
-              void loadConfirmedTransfers(groupId, 1);
-            }
-          }}
-        />
-
-        {loadingConfirmedTransfers && (
-          <StatusBanner
-            variant="loading"
-            message="Loading confirmed transfers..."
-          />
-        )}
-        {confirmedTransfersError && (
-          <StatusBanner
-            variant="error"
-            message={confirmedTransfersError}
-            onRetry={() =>
-              Number.isFinite(groupId) &&
-              loadConfirmedTransfers(groupId, confirmedTransfersPage)
-            }
-          />
-        )}
-        {!loadingConfirmedTransfers &&
-          !confirmedTransfersError &&
-          confirmedTransfers.length === 0 && (
+          {loadingExpenses && (
+            <StatusBanner variant="loading" message="Loading expenses..." />
+          )}
+          {expensesError && (
             <StatusBanner
-              variant="empty"
-              message="No confirmed transfers yet."
+              variant="error"
+              message={expensesError}
+              onRetry={() =>
+                Number.isFinite(groupId) && loadExpenses(groupId, expensesPage)
+              }
             />
           )}
-        {!loadingConfirmedTransfers &&
-          !confirmedTransfersError &&
-          confirmedTransfers.length > 0 && (
-            <div className="mt-4 space-y-2">
-              {confirmedTransfers.map((transfer) => {
-                const fromMember = members.find(
-                  (m) => m.id === transfer.fromUserId,
-                );
-                const toMember = members.find(
-                  (m) => m.id === transfer.toUserId,
-                );
-                const fromLabel = fromMember
-                  ? getMemberName(fromMember)
-                  : `User #${transfer.fromUserId}`;
-                const toLabel = toMember
-                  ? getMemberName(toMember)
-                  : `User #${transfer.toUserId}`;
-                return (
-                  <div
-                    key={transfer.id}
-                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600"
+          {deleteExpenseError && (
+            <StatusBanner variant="error" message={deleteExpenseError} />
+          )}
+          {!loadingExpenses && !expensesError && expenses.length === 0 && (
+            <StatusBanner
+              variant="empty"
+              message="No expenses yet. Add the first one above."
+            />
+          )}
+          {!loadingExpenses && !expensesError && expenses.length > 0 && (
+            <div className="mt-4 max-h-72 overflow-y-auto pr-1">
+              <ul className="space-y-3">
+                {expenses.map((ex, index) => (
+                  <li
+                    key={`${ex.expenseId ?? "new"}-${ex.payerUserId}-${ex.amount}-${ex.createdAt ?? index}`}
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-3"
                   >
-                    <div className="text-sm font-medium text-slate-900">
-                      {fromLabel} → {toLabel}: $
-                      {Number(transfer.amount).toFixed(2)}
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-medium text-slate-900">
+                          {ex.description}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          Paid by{" "}
+                          {(() => {
+                            const member = members.find(
+                              (m) => m.id === ex.payerUserId,
+                            );
+                            return member
+                              ? getMemberName(member)
+                              : "Unknown member";
+                          })()}
+                        </div>
+                        {ex.splits && ex.splits.length > 0 && (
+                          <div className="mt-2 space-y-1 text-xs text-slate-500">
+                            {ex.splits.map((split) => {
+                              const member = members.find(
+                                (m) => m.id === split.userId,
+                              );
+                              const label = member
+                                ? getMemberName(member)
+                                : `User #${split.userId}`;
+                              return (
+                                <div key={`${ex.expenseId}-${split.userId}`}>
+                                  {label}: $
+                                  {Number(split.shareAmount).toFixed(2)}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-col items-end gap-2">
+                        <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-sm font-semibold">
+                          ${Number(ex.amount).toFixed(2)}
+                        </div>
+                        <div className="flex items-center gap-2 text-xs">
+                          <button
+                            type="button"
+                            className="underline"
+                            onClick={() => startEditExpense(ex)}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="text-rose-600 underline"
+                            disabled={deletingExpenseId === ex.expenseId}
+                            onClick={() => deleteExpense(ex.expenseId)}
+                          >
+                            {deletingExpenseId === ex.expenseId
+                              ? "Deleting..."
+                              : "Delete"}
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                    <div className="mt-1">
-                      Confirmation: {transfer.confirmationId ?? "—"} ·{" "}
-                      {new Date(transfer.createdAt).toLocaleString()}
-                    </div>
-                  </div>
-                );
-              })}
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
-        {!loadingConfirmedTransfers &&
-          !confirmedTransfersError &&
-          confirmedTransfersTotalItems > 0 && (
+          {!loadingExpenses && !expensesError && expensesTotalItems > 0 && (
             <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
               <span>
-                Page {confirmedTransfersPage} of {confirmedTransfersTotalPages} (
-                {confirmedTransfersTotalItems} transfers)
+                Page {expensesPage} of {expensesTotalPages} (
+                {expensesTotalItems} expenses)
               </span>
               <div className="flex items-center gap-3">
                 <label className="flex items-center gap-2">
                   <span>Page size</span>
                   <select
                     className="rounded-xl border border-slate-300 bg-white px-2 py-1"
-                    value={confirmedTransfersPageSize}
+                    value={expensesPageSize}
                     onChange={(e) => {
                       const nextSize = Number(e.target.value);
-                      setConfirmedTransfersPageSize(nextSize);
+                      setExpensesPageSize(nextSize);
                       if (Number.isFinite(groupId)) {
-                        void loadConfirmedTransfers(groupId, 1, nextSize);
+                        void loadExpenses(groupId, 1, nextSize);
                       }
                     }}
-                    disabled={loadingConfirmedTransfers}
+                    disabled={loadingExpenses}
                   >
                     {[5, 10, 25, 50, 100].map((size) => (
                       <option key={size} value={size}>
@@ -3170,143 +2163,1272 @@ export default function GroupPage() {
                   </select>
                 </label>
                 <PaginationControls
-                  currentPage={confirmedTransfersPage}
-                  totalPages={confirmedTransfersTotalPages}
-                  loading={loadingConfirmedTransfers}
+                  currentPage={expensesPage}
+                  totalPages={expensesTotalPages}
+                  loading={loadingExpenses}
                   onPageChange={(page) =>
-                    Number.isFinite(groupId) &&
-                    void loadConfirmedTransfers(groupId, page)
+                    Number.isFinite(groupId) && void loadExpenses(groupId, page)
                   }
                 />
               </div>
             </div>
           )}
-      </div>
+        </div>
 
-      <div className={cardClassName}>
-        <div className="flex items-center justify-between">
-          <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-            Expense events
-          </h2>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 text-xs text-slate-600">
-              <span>Date</span>
-              <button
-                className={`rounded border px-1 leading-none ${eventsSort === "createdAt,asc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
-                onClick={() => {
-                  setEventsSort("createdAt,asc");
-                  if (Number.isFinite(groupId)) {
-                    void loadEvents(groupId, 1, eventsPageSize, "createdAt,asc");
+        {activeTab === "expenses" && editingExpenseId !== null && (
+          <div className={getSectionClass("expenses")}>
+            <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+              Update expense
+            </h2>
+
+            <div className="mt-3 grid grid-cols-1 gap-3">
+              <input
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none"
+                placeholder="Description"
+                value={editDesc}
+                onChange={(e) => setEditDesc(e.target.value)}
+              />
+
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <input
+                  className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 outline-none"
+                  placeholder="Amount (e.g., 42.50)"
+                  value={editAmount}
+                  onChange={(e) => setEditAmount(e.target.value)}
+                  inputMode="decimal"
+                />
+
+                <select
+                  className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2"
+                  value={editPaidByUserId}
+                  onChange={(e) =>
+                    setEditPaidByUserId(
+                      e.target.value ? Number(e.target.value) : "",
+                    )
                   }
-                }}
-                disabled={loadingEvents}
-                aria-label="Sort events by date ascending"
-              >
-                ▲
-              </button>
-              <button
-                className={`rounded border px-1 leading-none ${eventsSort === "createdAt,desc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
-                onClick={() => {
-                  setEventsSort("createdAt,desc");
-                  if (Number.isFinite(groupId)) {
-                    void loadEvents(groupId, 1, eventsPageSize, "createdAt,desc");
+                >
+                  <option value="">Paid by...</option>
+                  {members.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {getMemberName(m)}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  onClick={updateExpense}
+                  disabled={
+                    updatingExpense ||
+                    !editDesc.trim() ||
+                    !editAmount ||
+                    editPaidByUserId === "" ||
+                    members.length === 0
                   }
-                }}
-                disabled={loadingEvents}
-                aria-label="Sort events by date descending"
-              >
-                ▼
-              </button>
+                  className="rounded-xl border border-slate-300 bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {updatingExpense ? "Updating..." : "Save"}
+                </button>
+                <button
+                  onClick={resetEditExpense}
+                  disabled={updatingExpense}
+                  className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </div>
+
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <select
+                  className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2"
+                  value={editSplitMode}
+                  onChange={(e) =>
+                    setEditSplitMode(
+                      e.target.value as
+                        | "equal"
+                        | "exact"
+                        | "percentage"
+                        | "shares",
+                    )
+                  }
+                >
+                  <option value="equal">Equal split</option>
+                  <option value="exact">Exact amounts</option>
+                  <option value="percentage">Percentages</option>
+                  <option value="shares">Shares</option>
+                </select>
+              </div>
+
+              {editSplitMode === "exact" && (
+                <div className="rounded-xl border border-slate-200 bg-white p-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                    Exact amounts
+                  </p>
+                  <p className="mt-2 text-xs text-slate-500">
+                    {(() => {
+                      const remaining = getRemainingAmount(
+                        editAmount,
+                        editExactAmounts,
+                        members.map((m) => m.id),
+                      );
+                      if (remaining === null) {
+                        return "Enter a total amount first.";
+                      }
+                      const label = remaining < 0 ? "Over by" : "Remaining";
+                      return `${label}: $${Math.abs(remaining).toFixed(2)}`;
+                    })()}
+                  </p>
+                  <div className="mt-3 space-y-2">
+                    {members.map((member) => (
+                      <div
+                        key={member.id}
+                        className="flex flex-col gap-2 sm:flex-row sm:items-center"
+                      >
+                        <span className="text-sm font-medium text-slate-900 sm:w-48">
+                          {getMemberName(member)}
+                        </span>
+                        <input
+                          className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                          placeholder="0.00"
+                          inputMode="decimal"
+                          value={editExactAmounts[member.id] ?? ""}
+                          onChange={(e) =>
+                            setEditExactAmounts((prev) => ({
+                              ...prev,
+                              [member.id]: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {editSplitMode === "percentage" && (
+                <div className="rounded-xl border border-slate-200 bg-white p-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                    Percentages
+                  </p>
+                  <div className="mt-3 space-y-2">
+                    {members.map((member) => (
+                      <div
+                        key={member.id}
+                        className="flex flex-col gap-2 sm:flex-row sm:items-center"
+                      >
+                        <span className="text-sm font-medium text-slate-900 sm:w-48">
+                          {getMemberName(member)}
+                        </span>
+                        <input
+                          className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                          placeholder="0"
+                          inputMode="decimal"
+                          value={editPercentages[member.id] ?? ""}
+                          onChange={(e) =>
+                            setEditPercentages((prev) => ({
+                              ...prev,
+                              [member.id]: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {editSplitMode === "shares" && (
+                <div className="rounded-xl border border-slate-200 bg-white p-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                    Shares
+                  </p>
+                  <div className="mt-3 space-y-2">
+                    {members.map((member) => (
+                      <div
+                        key={member.id}
+                        className="flex flex-col gap-2 sm:flex-row sm:items-center"
+                      >
+                        <span className="text-sm font-medium text-slate-900 sm:w-48">
+                          {getMemberName(member)}
+                        </span>
+                        <input
+                          className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                          placeholder="1"
+                          inputMode="numeric"
+                          value={editShares[member.id] ?? ""}
+                          onChange={(e) =>
+                            setEditShares((prev) => ({
+                              ...prev,
+                              [member.id]: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            {updatingExpense && (
+              <StatusBanner variant="loading" message="Updating expense..." />
+            )}
+            {updateExpenseError && (
+              <StatusBanner
+                variant="error"
+                message={updateExpenseError}
+                onRetry={updateExpense}
+              />
+            )}
+          </div>
+        )}
+
+        <div className={getSectionClass("settle")}>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                Settle up
+              </h2>
+              <p className="mt-1 text-xs text-slate-500">
+                Suggested transfers to square everyone up.
+              </p>
             </div>
             <button
               className="text-xs font-medium text-slate-600 underline"
               onClick={() =>
-                Number.isFinite(groupId) && loadEvents(groupId, eventsPage)
+                Number.isFinite(groupId) && loadSettlements(groupId)
               }
-              disabled={loadingEvents}
+              disabled={loadingSettlements}
             >
-              {loadingEvents ? "Refreshing..." : "Refresh"}
+              {loadingSettlements ? "Refreshing..." : "Refresh"}
             </button>
+          </div>
+
+          <div className="mt-3">
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <input
+                className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                placeholder="Confirmation ID (optional)"
+                value={confirmationId}
+                onChange={(e) => setConfirmationId(e.target.value)}
+              />
+              <button
+                type="button"
+                className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700"
+                onClick={generateConfirmationIdFromApi}
+              >
+                Generate ID
+              </button>
+            </div>
+            <p className="mt-1 text-xs text-slate-500">
+              Use a confirmation ID to make transfer confirmations idempotent.
+            </p>
+          </div>
+
+          {confirmationIdError && (
+            <StatusBanner
+              variant="error"
+              message={confirmationIdError}
+              onRetry={generateConfirmationIdFromApi}
+            />
+          )}
+          {confirmTransferError && (
+            <StatusBanner variant="error" message={confirmTransferError} />
+          )}
+          {loadingSettlements && (
+            <StatusBanner variant="loading" message="Loading settlements..." />
+          )}
+          {settlementsError && (
+            <StatusBanner
+              variant="error"
+              message={settlementsError}
+              onRetry={() =>
+                Number.isFinite(groupId) && loadSettlements(groupId)
+              }
+            />
+          )}
+          {!loadingSettlements &&
+            !settlementsError &&
+            settlements.length === 0 && (
+              <StatusBanner
+                variant="empty"
+                message="No transfers needed right now."
+              />
+            )}
+          {!loadingSettlements &&
+            !settlementsError &&
+            settlements.length > 0 &&
+            (() => {
+              const sortedTransfers = [...settlements].sort((a, b) => {
+                if (a.fromUserId !== b.fromUserId) {
+                  return a.fromUserId - b.fromUserId;
+                }
+                if (a.toUserId !== b.toUserId) {
+                  return a.toUserId - b.toUserId;
+                }
+                return Number(a.amount) - Number(b.amount);
+              });
+
+              return (
+                <div className="mt-4 max-h-80 overflow-y-auto pr-1">
+                  <ul className="space-y-3">
+                    {sortedTransfers.map((s) => {
+                      const fromMember = members.find(
+                        (m) => m.id === s.fromUserId,
+                      );
+                      const toMember = members.find((m) => m.id === s.toUserId);
+                      const fromLabel = fromMember
+                        ? getMemberName(fromMember)
+                        : "Unknown member";
+                      const toLabel = toMember
+                        ? getMemberName(toMember)
+                        : "Unknown member";
+                      const transferKey = getTransferKey(s);
+                      const isPaid = paidTransfers.has(transferKey);
+                      return (
+                        <li
+                          key={transferKey}
+                          className={`rounded-xl border px-3 py-3 ${
+                            isPaid
+                              ? "border-emerald-200 bg-emerald-50/60"
+                              : "border-slate-200 bg-white"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex flex-col gap-1 text-sm">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs uppercase tracking-wide text-slate-500">
+                                  Transfer
+                                </span>
+                                {isPaid && (
+                                  <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                                    Confirmed
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-sm font-medium text-slate-900">
+                                <span className="text-rose-700">
+                                  {fromLabel}
+                                </span>{" "}
+                                pays{" "}
+                                <span className="text-emerald-700">
+                                  {toLabel}
+                                </span>
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-sm font-semibold">
+                                ${Number(s.amount).toFixed(2)}
+                              </span>
+                              <button
+                                type="button"
+                                className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                                  isPaid
+                                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                    : "border-slate-200 bg-white text-slate-600"
+                                }`}
+                                onClick={() => confirmPaidTransfer(s)}
+                                disabled={
+                                  isPaid || confirmingTransfers.has(transferKey)
+                                }
+                              >
+                                {confirmingTransfers.has(transferKey)
+                                  ? "Confirming..."
+                                  : isPaid
+                                    ? "Confirmed"
+                                    : "Mark paid"}
+                              </button>
+                              <button
+                                type="button"
+                                className="text-xs font-medium text-slate-600 underline"
+                                onClick={() =>
+                                  navigator.clipboard.writeText(
+                                    `${fromLabel} pays ${toLabel} $${Number(s.amount).toFixed(2)}`,
+                                  )
+                                }
+                              >
+                                Copy
+                              </button>
+                            </div>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              );
+            })()}
+        </div>
+
+        <div className={getSectionClass("settle")}>
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+              Ledger
+            </h2>
+            <button
+              className="text-xs font-medium text-slate-600 underline"
+              onClick={() => Number.isFinite(groupId) && loadLedger(groupId)}
+              disabled={loadingLedger}
+            >
+              {loadingLedger ? "Refreshing..." : "Refresh"}
+            </button>
+          </div>
+
+          {loadingLedger && (
+            <StatusBanner variant="loading" message="Loading ledger..." />
+          )}
+          {ledgerError && (
+            <StatusBanner
+              variant="error"
+              message={ledgerError}
+              onRetry={() => Number.isFinite(groupId) && loadLedger(groupId)}
+            />
+          )}
+          {!loadingLedger && !ledgerError && ledgerEntries.length === 0 && (
+            <StatusBanner variant="empty" message="No ledger entries yet." />
+          )}
+          {!loadingLedger && !ledgerError && ledgerEntries.length > 0 && (
+            <div className="mt-4 space-y-2">
+              {ledgerEntries.map((entry) => {
+                const member = members.find((m) => m.id === entry.userId);
+                const label = member
+                  ? getMemberName(member)
+                  : `User #${entry.userId}`;
+                return (
+                  <div
+                    key={entry.userId}
+                    className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                  >
+                    <span className="font-medium text-slate-900">{label}</span>
+                    <span
+                      className={
+                        Number(entry.netBalance) >= 0
+                          ? "text-emerald-700"
+                          : "text-rose-700"
+                      }
+                    >
+                      {Number(entry.netBalance) >= 0 ? "+" : "-"}$
+                      {Math.abs(Number(entry.netBalance)).toFixed(2)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className={getSectionClass("explain")}>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                Ledger explanation
+              </h2>
+              <p className="mt-1 text-xs text-slate-500">
+                See which expenses and transfers drive each member&apos;s
+                balance.
+              </p>
+            </div>
+            <button
+              className="text-xs font-medium text-slate-600 underline"
+              onClick={() =>
+                Number.isFinite(groupId) && loadLedgerExplanation(groupId)
+              }
+              disabled={loadingLedgerExplanation}
+            >
+              {loadingLedgerExplanation ? "Explaining..." : "Explain"}
+            </button>
+          </div>
+
+          {loadingLedgerExplanation && (
+            <StatusBanner
+              variant="loading"
+              message="Loading ledger explanation..."
+            />
+          )}
+          {ledgerExplanationError && (
+            <StatusBanner
+              variant="error"
+              message={ledgerExplanationError}
+              onRetry={() =>
+                Number.isFinite(groupId) && loadLedgerExplanation(groupId)
+              }
+            />
+          )}
+          {!loadingLedgerExplanation && !ledgerExplanationError && (
+            <div className="mt-4">
+              <label className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                Select group member
+              </label>
+              <select
+                className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                value={selectedLedgerExplanationUserId}
+                onChange={(e) =>
+                  setSelectedLedgerExplanationUserId(
+                    e.target.value ? Number(e.target.value) : "",
+                  )
+                }
+              >
+                <option value="">Select group member</option>
+                {ledgerExplanationEntries.map((entry) => {
+                  const member = members.find((m) => m.id === entry.userId);
+                  const label = member
+                    ? getMemberName(member)
+                    : `User #${entry.userId}`;
+                  return (
+                    <option key={entry.userId} value={entry.userId}>
+                      {label}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          )}
+          {!loadingLedgerExplanation &&
+            !ledgerExplanationError &&
+            ledgerExplanationEntries.length === 0 && (
+              <StatusBanner
+                variant="empty"
+                message="No explanation data yet."
+              />
+            )}
+          {!loadingLedgerExplanation &&
+            !ledgerExplanationError &&
+            ledgerExplanationEntries.length > 0 &&
+            selectedLedgerExplanationUserId === "" && (
+              <StatusBanner
+                variant="info"
+                message="Select group member to view explanation."
+              />
+            )}
+          {!loadingLedgerExplanation &&
+            !ledgerExplanationError &&
+            ledgerExplanationEntries.length > 0 &&
+            selectedLedgerExplanationUserId !== "" && (
+              <div className="mt-4 space-y-4">
+                {ledgerExplanationEntries
+                  .filter(
+                    (entry) => entry.userId === selectedLedgerExplanationUserId,
+                  )
+                  .map((entry) => {
+                    const member = members.find((m) => m.id === entry.userId);
+                    const label = member
+                      ? getMemberName(member)
+                      : `User #${entry.userId}`;
+                    const netValue = Number(entry.netBalance ?? "");
+                    const netLabel = Number.isFinite(netValue)
+                      ? `${netValue >= 0 ? "+" : "-"}$${Math.abs(
+                          netValue,
+                        ).toFixed(2)}`
+                      : (entry.netBalance ?? "—");
+                    const netClass = Number.isFinite(netValue)
+                      ? netValue >= 0
+                        ? "text-emerald-700"
+                        : "text-rose-700"
+                      : "text-slate-600";
+                    const expenses =
+                      entry.expenses ?? entry.contributingExpenses ?? [];
+                    const transfersIn = entry.transfersIn ?? [];
+                    const transfersOut = entry.transfersOut ?? [];
+                    const transfers =
+                      entry.transfers ?? entry.contributingTransfers ?? [];
+                    const contributions = entry.contributions ?? [];
+                    const showDirectionalTransfers =
+                      transfersIn.length > 0 || transfersOut.length > 0;
+
+                    return (
+                      <div
+                        key={entry.userId}
+                        className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="font-medium text-slate-900">
+                              {label}
+                            </div>
+                            <div className="text-xs text-slate-500">
+                              Net balance
+                            </div>
+                          </div>
+                          <span className={netClass}>{netLabel}</span>
+                        </div>
+
+                        {expenses.length > 0 && (
+                          <div className="mt-3">
+                            <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                              Expenses
+                            </div>
+                            <div className="mt-2 space-y-2">
+                              {expenses.map((expense) => {
+                                const payer = members.find(
+                                  (m) => m.id === expense.payerUserId,
+                                );
+                                const payerLabel = payer
+                                  ? getMemberName(payer)
+                                  : expense.payerUserId
+                                    ? `User #${expense.payerUserId}`
+                                    : "Unknown payer";
+                                return (
+                                  <div
+                                    key={`${entry.userId}-${expense.expenseId ?? expense.description}`}
+                                    className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2"
+                                  >
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div>
+                                        <div className="font-medium text-slate-900">
+                                          {expense.description ?? "Expense"}
+                                        </div>
+                                        <div className="text-xs text-slate-500">
+                                          Paid by {payerLabel}
+                                        </div>
+                                      </div>
+                                      <span className="text-xs font-semibold text-slate-700">
+                                        {formatMoney(expense.amount)}
+                                      </span>
+                                    </div>
+                                    {expense.splits &&
+                                      expense.splits.length > 0 && (
+                                        <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-600">
+                                          {expense.splits.map((split) => {
+                                            const splitMember = members.find(
+                                              (m) => m.id === split.userId,
+                                            );
+                                            const splitLabel = splitMember
+                                              ? getMemberName(splitMember)
+                                              : `User #${split.userId}`;
+                                            return (
+                                              <span
+                                                key={`${entry.userId}-${expense.expenseId}-${split.userId}`}
+                                                className="rounded-full border border-slate-200 bg-white px-2 py-1"
+                                              >
+                                                {splitLabel}{" "}
+                                                {formatMoney(split.shareAmount)}
+                                              </span>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {(showDirectionalTransfers || transfers.length > 0) && (
+                          <div className="mt-3">
+                            <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                              Transfers
+                            </div>
+                            {showDirectionalTransfers ? (
+                              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                                {transfersIn.length > 0 && (
+                                  <div className="space-y-2">
+                                    <div className="text-[11px] font-medium text-emerald-700">
+                                      Incoming
+                                    </div>
+                                    {transfersIn.map((transfer) => {
+                                      const fromMember = members.find(
+                                        (m) => m.id === transfer.fromUserId,
+                                      );
+                                      const fromLabel = fromMember
+                                        ? getMemberName(fromMember)
+                                        : `User #${transfer.fromUserId}`;
+                                      return (
+                                        <div
+                                          key={`${entry.userId}-in-${transfer.fromUserId}-${transfer.toUserId}-${transfer.amount}`}
+                                          className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2"
+                                        >
+                                          <div className="flex items-center justify-between gap-2">
+                                            <span className="text-xs text-slate-600">
+                                              {fromLabel} → {label}
+                                            </span>
+                                            <span className="text-xs font-semibold text-emerald-700">
+                                              {formatMoney(transfer.amount)}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                                {transfersOut.length > 0 && (
+                                  <div className="space-y-2">
+                                    <div className="text-[11px] font-medium text-rose-700">
+                                      Outgoing
+                                    </div>
+                                    {transfersOut.map((transfer) => {
+                                      const toMember = members.find(
+                                        (m) => m.id === transfer.toUserId,
+                                      );
+                                      const toLabel = toMember
+                                        ? getMemberName(toMember)
+                                        : `User #${transfer.toUserId}`;
+                                      return (
+                                        <div
+                                          key={`${entry.userId}-out-${transfer.fromUserId}-${transfer.toUserId}-${transfer.amount}`}
+                                          className="rounded-lg border border-rose-100 bg-rose-50 px-3 py-2"
+                                        >
+                                          <div className="flex items-center justify-between gap-2">
+                                            <span className="text-xs text-slate-600">
+                                              {label} → {toLabel}
+                                            </span>
+                                            <span className="text-xs font-semibold text-rose-700">
+                                              {formatMoney(transfer.amount)}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="mt-2 space-y-2">
+                                {transfers.map((transfer) => {
+                                  const fromMember = members.find(
+                                    (m) => m.id === transfer.fromUserId,
+                                  );
+                                  const toMember = members.find(
+                                    (m) => m.id === transfer.toUserId,
+                                  );
+                                  const fromLabel = fromMember
+                                    ? getMemberName(fromMember)
+                                    : `User #${transfer.fromUserId}`;
+                                  const toLabel = toMember
+                                    ? getMemberName(toMember)
+                                    : `User #${transfer.toUserId}`;
+                                  return (
+                                    <div
+                                      key={`${entry.userId}-${transfer.fromUserId}-${transfer.toUserId}-${transfer.amount}`}
+                                      className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2"
+                                    >
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className="text-xs text-slate-600">
+                                          {fromLabel} → {toLabel}
+                                        </span>
+                                        <span className="text-xs font-semibold text-slate-700">
+                                          {formatMoney(transfer.amount)}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {contributions.length > 0 && (
+                          <div className="mt-3">
+                            <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                              Contributions
+                            </div>
+                            <div className="mt-2 space-y-2">
+                              {contributions.map((contribution, index) => (
+                                <div
+                                  key={`${entry.userId}-${contribution.referenceId ?? index}-${contribution.type ?? "contribution"}`}
+                                  className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2"
+                                >
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div>
+                                      <div className="text-xs font-medium text-slate-900">
+                                        {contribution.type
+                                          ? contribution.type
+                                              .toLowerCase()
+                                              .replace(/_/g, " ")
+                                              .replace(/\b\w/g, (c) =>
+                                                c.toUpperCase(),
+                                              )
+                                          : "Contribution"}
+                                      </div>
+                                      <div className="text-xs text-slate-600">
+                                        {formatContributionDescription(
+                                          contribution.description,
+                                        )}
+                                      </div>
+                                    </div>
+                                    <span className="text-xs font-semibold text-slate-700">
+                                      {formatMoney(contribution.amount)}
+                                    </span>
+                                  </div>
+                                  {contribution.timestamp && (
+                                    <div className="mt-1 text-[11px] text-slate-500">
+                                      {new Date(
+                                        contribution.timestamp,
+                                      ).toLocaleString()}{" "}
+                                      (
+                                      {getShortTimeZoneLabel(
+                                        contribution.timestamp,
+                                      )}
+                                      )
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
+        </div>
+
+        <div className={getSectionClass("settle")}>
+          <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+            Owes lookup
+          </h2>
+          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <select
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+              value={owesFromUserId}
+              onChange={(e) =>
+                setOwesFromUserId(e.target.value ? Number(e.target.value) : "")
+              }
+            >
+              <option value="">From user...</option>
+              {members
+                .filter((m) => m.id !== owesToUserId)
+                .map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {getMemberName(m)}
+                  </option>
+                ))}
+            </select>
+            <select
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+              value={owesToUserId}
+              onChange={(e) =>
+                setOwesToUserId(e.target.value ? Number(e.target.value) : "")
+              }
+            >
+              <option value="">To user...</option>
+              {members
+                .filter((m) => m.id !== owesFromUserId)
+                .map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {getMemberName(m)}
+                  </option>
+                ))}
+            </select>
+            <div className="flex gap-2">
+              <button
+                className="flex-1 rounded-xl border border-slate-300 bg-slate-900 px-3 py-2 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={
+                  loadingOwes ||
+                  owesFromUserId === "" ||
+                  owesToUserId === "" ||
+                  owesFromUserId === owesToUserId
+                }
+                onClick={() => Number.isFinite(groupId) && loadOwes(groupId)}
+              >
+                Current
+              </button>
+              <button
+                className="flex-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={
+                  loadingOwes ||
+                  owesFromUserId === "" ||
+                  owesToUserId === "" ||
+                  owesFromUserId === owesToUserId
+                }
+                onClick={() =>
+                  Number.isFinite(groupId) && loadOwesHistorical(groupId)
+                }
+              >
+                Historical
+              </button>
+            </div>
+          </div>
+          <div className="mt-3 text-sm text-slate-600">
+            {loadingOwes && (
+              <StatusBanner variant="loading" message="Loading owes..." />
+            )}
+            {owesError && (
+              <StatusBanner
+                variant="error"
+                message={owesError}
+                onRetry={() =>
+                  Number.isFinite(groupId) &&
+                  (owesView === "historical"
+                    ? loadOwesHistorical(groupId)
+                    : loadOwes(groupId))
+                }
+              />
+            )}
+            {!loadingOwes &&
+              !owesError &&
+              owesAmount === null &&
+              owesHistoricalAmount === null && (
+                <StatusBanner
+                  variant="empty"
+                  message="Select two members to see what’s owed."
+                />
+              )}
+            {!loadingOwes &&
+              !owesError &&
+              owesView === "current" &&
+              owesAmount !== null && (
+                <div>Current owes: ${owesAmount.toFixed(2)}</div>
+              )}
+            {!loadingOwes &&
+              !owesError &&
+              owesView === "historical" &&
+              owesHistoricalAmount !== null && (
+                <div>Historical owes: ${owesHistoricalAmount.toFixed(2)}</div>
+              )}
           </div>
         </div>
 
-        {loadingEvents && (
-          <StatusBanner variant="loading" message="Loading events..." />
-        )}
-        {eventsError && (
-          <StatusBanner
-            variant="error"
-            message={eventsError}
-            onRetry={() =>
-              Number.isFinite(groupId) && loadEvents(groupId, eventsPage)
-            }
-          />
-        )}
-        {!loadingEvents && !eventsError && events.length === 0 && (
-          <StatusBanner variant="empty" message="No events yet." />
-        )}
-        {!loadingEvents && !eventsError && events.length > 0 && (
-          <div className="mt-4 max-h-64 overflow-y-auto pr-1">
-            <ul className="space-y-2">
-              {events.map((event) => (
-                <li
-                  key={event.eventId}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600"
-                >
-                  <div className="text-sm font-medium text-slate-900">
-                    {event.eventType}
-                  </div>
-                  <div className="mt-1">
-                    {new Date(event.createdAt).toLocaleString()} (
-                    {getShortTimeZoneLabel(event.createdAt)})
-                  </div>
-                  <div className="mt-2 whitespace-pre-wrap break-words text-[11px] text-slate-500">
-                    {formatEventPayload(event.payload)}
-                  </div>
-                </li>
-              ))}
-            </ul>
+        <div className={getSectionClass("history")}>
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+              Confirmed transfers
+            </h2>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3 text-xs text-slate-600">
+                <div className="flex items-center gap-1">
+                  <span>Date</span>
+                  <button
+                    className={`rounded border px-1 leading-none ${confirmedTransfersSort === "createdAt,asc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
+                    onClick={() => {
+                      setConfirmedTransfersSort("createdAt,asc");
+                      if (Number.isFinite(groupId)) {
+                        void loadConfirmedTransfers(
+                          groupId,
+                          1,
+                          confirmedTransfersPageSize,
+                          "createdAt,asc",
+                        );
+                      }
+                    }}
+                    disabled={loadingConfirmedTransfers}
+                    aria-label="Sort confirmed transfers by date ascending"
+                  >
+                    ▲
+                  </button>
+                  <button
+                    className={`rounded border px-1 leading-none ${confirmedTransfersSort === "createdAt,desc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
+                    onClick={() => {
+                      setConfirmedTransfersSort("createdAt,desc");
+                      if (Number.isFinite(groupId)) {
+                        void loadConfirmedTransfers(
+                          groupId,
+                          1,
+                          confirmedTransfersPageSize,
+                          "createdAt,desc",
+                        );
+                      }
+                    }}
+                    disabled={loadingConfirmedTransfers}
+                    aria-label="Sort confirmed transfers by date descending"
+                  >
+                    ▼
+                  </button>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span>Amount</span>
+                  <button
+                    className={`rounded border px-1 leading-none ${confirmedTransfersSort === "amount,asc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
+                    onClick={() => {
+                      setConfirmedTransfersSort("amount,asc");
+                      if (Number.isFinite(groupId)) {
+                        void loadConfirmedTransfers(
+                          groupId,
+                          1,
+                          confirmedTransfersPageSize,
+                          "amount,asc",
+                        );
+                      }
+                    }}
+                    disabled={loadingConfirmedTransfers}
+                    aria-label="Sort confirmed transfers by amount ascending"
+                  >
+                    ▲
+                  </button>
+                  <button
+                    className={`rounded border px-1 leading-none ${confirmedTransfersSort === "amount,desc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
+                    onClick={() => {
+                      setConfirmedTransfersSort("amount,desc");
+                      if (Number.isFinite(groupId)) {
+                        void loadConfirmedTransfers(
+                          groupId,
+                          1,
+                          confirmedTransfersPageSize,
+                          "amount,desc",
+                        );
+                      }
+                    }}
+                    disabled={loadingConfirmedTransfers}
+                    aria-label="Sort confirmed transfers by amount descending"
+                  >
+                    ▼
+                  </button>
+                </div>
+              </div>
+              <button
+                className="text-xs font-medium text-slate-600 underline"
+                onClick={() =>
+                  Number.isFinite(groupId) &&
+                  loadConfirmedTransfers(groupId, confirmedTransfersPage)
+                }
+                disabled={loadingConfirmedTransfers}
+              >
+                {loadingConfirmedTransfers ? "Refreshing..." : "Refresh"}
+              </button>
+            </div>
           </div>
-        )}
-        {!loadingEvents && !eventsError && eventsTotalItems > 0 && (
-          <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
-            <span>
-              Page {eventsPage} of {eventsTotalPages} ({eventsTotalItems} events)
-            </span>
-            <div className="flex items-center gap-3">
-              <label className="flex items-center gap-2">
-                <span>Page size</span>
-                <select
-                  className="rounded-xl border border-slate-300 bg-white px-2 py-1"
-                  value={eventsPageSize}
-                  onChange={(e) => {
-                    const nextSize = Number(e.target.value);
-                    setEventsPageSize(nextSize);
+
+          <input
+            className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+            placeholder="Filter by confirmation ID (optional)"
+            value={confirmedFilter}
+            onChange={(e) => setConfirmedFilter(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && Number.isFinite(groupId)) {
+                void loadConfirmedTransfers(groupId, 1);
+              }
+            }}
+          />
+
+          {loadingConfirmedTransfers && (
+            <StatusBanner
+              variant="loading"
+              message="Loading confirmed transfers..."
+            />
+          )}
+          {confirmedTransfersError && (
+            <StatusBanner
+              variant="error"
+              message={confirmedTransfersError}
+              onRetry={() =>
+                Number.isFinite(groupId) &&
+                loadConfirmedTransfers(groupId, confirmedTransfersPage)
+              }
+            />
+          )}
+          {!loadingConfirmedTransfers &&
+            !confirmedTransfersError &&
+            confirmedTransfers.length === 0 && (
+              <StatusBanner
+                variant="empty"
+                message="No confirmed transfers yet."
+              />
+            )}
+          {!loadingConfirmedTransfers &&
+            !confirmedTransfersError &&
+            confirmedTransfers.length > 0 && (
+              <div className="mt-4 space-y-2">
+                {confirmedTransfers.map((transfer) => {
+                  const fromMember = members.find(
+                    (m) => m.id === transfer.fromUserId,
+                  );
+                  const toMember = members.find(
+                    (m) => m.id === transfer.toUserId,
+                  );
+                  const fromLabel = fromMember
+                    ? getMemberName(fromMember)
+                    : `User #${transfer.fromUserId}`;
+                  const toLabel = toMember
+                    ? getMemberName(toMember)
+                    : `User #${transfer.toUserId}`;
+                  return (
+                    <div
+                      key={transfer.id}
+                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600"
+                    >
+                      <div className="text-sm font-medium text-slate-900">
+                        {fromLabel} → {toLabel}: $
+                        {Number(transfer.amount).toFixed(2)}
+                      </div>
+                      <div className="mt-1">
+                        Confirmation: {transfer.confirmationId ?? "—"} ·{" "}
+                        {new Date(transfer.createdAt).toLocaleString()}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          {!loadingConfirmedTransfers &&
+            !confirmedTransfersError &&
+            confirmedTransfersTotalItems > 0 && (
+              <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
+                <span>
+                  Page {confirmedTransfersPage} of{" "}
+                  {confirmedTransfersTotalPages} ({confirmedTransfersTotalItems}{" "}
+                  transfers)
+                </span>
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-2">
+                    <span>Page size</span>
+                    <select
+                      className="rounded-xl border border-slate-300 bg-white px-2 py-1"
+                      value={confirmedTransfersPageSize}
+                      onChange={(e) => {
+                        const nextSize = Number(e.target.value);
+                        setConfirmedTransfersPageSize(nextSize);
+                        if (Number.isFinite(groupId)) {
+                          void loadConfirmedTransfers(groupId, 1, nextSize);
+                        }
+                      }}
+                      disabled={loadingConfirmedTransfers}
+                    >
+                      {[5, 10, 25, 50, 100].map((size) => (
+                        <option key={size} value={size}>
+                          {size}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <PaginationControls
+                    currentPage={confirmedTransfersPage}
+                    totalPages={confirmedTransfersTotalPages}
+                    loading={loadingConfirmedTransfers}
+                    onPageChange={(page) =>
+                      Number.isFinite(groupId) &&
+                      void loadConfirmedTransfers(groupId, page)
+                    }
+                  />
+                </div>
+              </div>
+            )}
+        </div>
+
+        <div className={getSectionClass("history")}>
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+              Expense events
+            </h2>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 text-xs text-slate-600">
+                <span>Date</span>
+                <button
+                  className={`rounded border px-1 leading-none ${eventsSort === "createdAt,asc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
+                  onClick={() => {
+                    setEventsSort("createdAt,asc");
                     if (Number.isFinite(groupId)) {
-                      void loadEvents(groupId, 1, nextSize);
+                      void loadEvents(
+                        groupId,
+                        1,
+                        eventsPageSize,
+                        "createdAt,asc",
+                      );
                     }
                   }}
                   disabled={loadingEvents}
+                  aria-label="Sort events by date ascending"
                 >
-                  {[5, 10, 25, 50, 100].map((size) => (
-                    <option key={size} value={size}>
-                      {size}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <PaginationControls
-                currentPage={eventsPage}
-                totalPages={eventsTotalPages}
-                loading={loadingEvents}
-                onPageChange={(page) =>
-                  Number.isFinite(groupId) && void loadEvents(groupId, page)
+                  ▲
+                </button>
+                <button
+                  className={`rounded border px-1 leading-none ${eventsSort === "createdAt,desc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
+                  onClick={() => {
+                    setEventsSort("createdAt,desc");
+                    if (Number.isFinite(groupId)) {
+                      void loadEvents(
+                        groupId,
+                        1,
+                        eventsPageSize,
+                        "createdAt,desc",
+                      );
+                    }
+                  }}
+                  disabled={loadingEvents}
+                  aria-label="Sort events by date descending"
+                >
+                  ▼
+                </button>
+              </div>
+              <button
+                className="text-xs font-medium text-slate-600 underline"
+                onClick={() =>
+                  Number.isFinite(groupId) && loadEvents(groupId, eventsPage)
                 }
-              />
+                disabled={loadingEvents}
+              >
+                {loadingEvents ? "Refreshing..." : "Refresh"}
+              </button>
             </div>
           </div>
-        )}
-      </div>
+
+          {loadingEvents && (
+            <StatusBanner variant="loading" message="Loading events..." />
+          )}
+          {eventsError && (
+            <StatusBanner
+              variant="error"
+              message={eventsError}
+              onRetry={() =>
+                Number.isFinite(groupId) && loadEvents(groupId, eventsPage)
+              }
+            />
+          )}
+          {!loadingEvents && !eventsError && events.length === 0 && (
+            <StatusBanner variant="empty" message="No events yet." />
+          )}
+          {!loadingEvents && !eventsError && events.length > 0 && (
+            <div className="mt-4 max-h-64 overflow-y-auto pr-1">
+              <ul className="space-y-2">
+                {events.map((event) => (
+                  <li
+                    key={event.eventId}
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600"
+                  >
+                    <div className="text-sm font-medium text-slate-900">
+                      {event.eventType}
+                    </div>
+                    <div className="mt-1">
+                      {new Date(event.createdAt).toLocaleString()} (
+                      {getShortTimeZoneLabel(event.createdAt)})
+                    </div>
+                    <div className="mt-2 whitespace-pre-wrap break-words text-[11px] text-slate-500">
+                      {formatEventPayload(event.payload)}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {!loadingEvents && !eventsError && eventsTotalItems > 0 && (
+            <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
+              <span>
+                Page {eventsPage} of {eventsTotalPages} ({eventsTotalItems}{" "}
+                events)
+              </span>
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-2">
+                  <span>Page size</span>
+                  <select
+                    className="rounded-xl border border-slate-300 bg-white px-2 py-1"
+                    value={eventsPageSize}
+                    onChange={(e) => {
+                      const nextSize = Number(e.target.value);
+                      setEventsPageSize(nextSize);
+                      if (Number.isFinite(groupId)) {
+                        void loadEvents(groupId, 1, nextSize);
+                      }
+                    }}
+                    disabled={loadingEvents}
+                  >
+                    {[5, 10, 25, 50, 100].map((size) => (
+                      <option key={size} value={size}>
+                        {size}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <PaginationControls
+                  currentPage={eventsPage}
+                  totalPages={eventsTotalPages}
+                  loading={loadingEvents}
+                  onPageChange={(page) =>
+                    Number.isFinite(groupId) && void loadEvents(groupId, page)
+                  }
+                />
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </main>
   );
