@@ -1,198 +1,131 @@
 # Fairshare Frontend
 
-A lightweight Next.js frontend for managing groups, members, expenses, and settle-up transfers.
+Next.js App Router frontend for managing shared expenses in groups: members, expenses, settlement suggestions, ledger explanations, and audit history.
 
-## Requirements
+## Tech Stack
+
+- Next.js `16.1.4` (App Router)
+- React `19.2.3`
+- TypeScript `5`
+- Tailwind CSS `4`
+
+## Prerequisites
 
 - Node.js 18+
-- A running backend that exposes the endpoints below
+- A running backend API
 
-## Setup
+## Environment
 
-Create `.env.local` with your API base URL:
+Create `.env.local`:
 
 ```bash
 NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
 ```
 
-## Getting started
+The app fails fast if `NEXT_PUBLIC_API_BASE_URL` is missing.
 
-Install dependencies and run the dev server:
+## Run
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3000`.
 
-## Features
+## NPM Scripts
 
-- Create groups and rename them
-- Group list filtering by name (supports wildcard `*` and `?`)
-- Group list pagination with:
-  - page buttons (`1, 2, 3, ...`)
-  - Previous/Next
-  - page-size selector (`5, 10, 25, 50, 100`)
-  - per-column sort buttons (`▲`/`▼`) for Name and Members
-- Add members to a group
-- Add expenses with split modes:
-  - Equal split
-  - Exact amounts
-  - Percentages
-- View expenses and settle-up transfers
-- Group detail lists (Expenses, Confirmed transfers, Expense events) support:
-  - page buttons (`1, 2, 3, ...`)
-  - Previous/Next
-  - page-size selector (`5, 10, 25, 50, 100`)
-  - sort buttons (`▲`/`▼`) by relevant columns
-- Confirm transfers ("Mark paid") with backend persistence
-- Ledger explanation with member selector dropdown and contribution details
+- `npm run dev`: Start development server.
+- `npm run build`: Build production bundle.
+- `npm run start`: Run production server.
+- `npm run lint`: Run ESLint.
 
-## Implementation evidence (audit map)
+## Core Functionality
 
-The sections below map each major UI capability to the exact screen/component where it is implemented.
+- Home page:
+  - Create group
+  - Rename group
+  - List groups with pagination, sorting, and wildcard name filter (`*`, `?`)
+  - API status checks (`/` and `/health`)
+- Group page tabs:
+  - `Members`: rename group + add/list members
+  - `Expenses`: add/edit/delete expenses with split modes (equal, exact, percentage, shares)
+  - `Settle`: suggested transfers, confirm transfers (idempotent confirmation ID), ledger view, owes lookup
+  - `Explain`: per-member ledger explanation with expenses/transfers/contributions breakdown
+  - `History`: confirmed transfers list + expense events list, both paginated/sortable
 
-### Home page (`src/app/page.tsx`)
+## API Endpoints Used
 
-- Group pagination:
-  - Numbered page buttons + Previous/Next
-  - Page size selector (`5, 10, 25, 50, 100`)
-  - Active/current page highlighted
-  - Query params sent: `page`, `pageSize`
-- Group sorting:
-  - Column-side sort buttons (`▲`/`▼`) for:
-    - Name (`name,asc` / `name,desc`)
-    - Members (`memberCount,asc` / `memberCount,desc`)
-  - Query param sent: `sort`
-- Group filtering:
-  - Name filter input with Apply/Clear
-  - Supports wildcard patterns:
-    - `*` matches any sequence
-    - `?` matches one character
-  - Query param sent: `name`
-  - Fallback current-page filter still applied client-side if backend ignores filter
-- Members column:
-  - Uses `memberCount` from API response (`GroupResponse`)
+Base URL: `NEXT_PUBLIC_API_BASE_URL`
 
-### Group page (`src/app/groups/[groupId]/page.tsx`)
+- Status: `GET /`, `GET /health`
+- Groups: `GET /groups`, `POST /groups`, `GET /groups/{groupId}`, `PATCH /groups/{groupId}`
+- Members: `POST /groups/{groupId}/members`
+- Expenses: `GET /groups/{groupId}/expenses`, `POST /groups/{groupId}/expenses`, `PATCH /groups/{groupId}/expenses/{expenseId}`, `DELETE /groups/{groupId}/expenses/{expenseId}`
+- Settlements: `GET /groups/{groupId}/settlements`, `POST /groups/{groupId}/settlements/confirm`, `GET /groups/{groupId}/api/confirmation-id`
+- Ledger/Explain: `GET /groups/{groupId}/ledger`, `GET /groups/{groupId}/explanations/ledger`
+- History/Audit: `GET /groups/{groupId}/confirmed-transfers`, `GET /groups/{groupId}/events`
+- Owes: `GET /groups/{groupId}/owes`, `GET /groups/{groupId}/owes/historical`
 
-- Expenses list:
-  - Numbered pagination + Previous/Next
-  - Page size selector (`5, 10, 25, 50, 100`)
-  - Sort controls (`Date ▲/▼`, `Amount ▲/▼`)
-  - Query params sent: `page`, `size`, `sort`
-- Confirmed transfers list:
-  - Numbered pagination + Previous/Next
-  - Page size selector (`5, 10, 25, 50, 100`)
-  - Sort controls (`Date ▲/▼`, `Amount ▲/▼`)
-  - Optional confirmation filter input
-  - Query params sent: `confirmationId`, `page`, `size`, `sort`
-- Expense events list:
-  - Numbered pagination + Previous/Next
-  - Page size selector (`5, 10, 25, 50, 100`)
-  - Sort controls (`Date ▲/▼`)
-  - Query params sent: `page`, `size`, `sort`
-- Ledger explanation UI:
-  - Loads from `/groups/{groupId}/explanations/ledger`
-  - Member dropdown (`Select group member`)
-  - Renders selected member details only
-  - Supports response shape with top-level `explanations` and `contributions`
+## File-by-File Guide
 
-## Quick verification checklist
+### Root config and metadata
 
-Use this checklist to verify implementation end-to-end in a running app:
+- `README.md`: Project documentation.
+- `package.json`: Package metadata, dependencies, scripts.
+- `package-lock.json`: Exact dependency lockfile.
+- `tsconfig.json`: TypeScript compiler settings and include paths.
+- `next.config.ts`: Next.js configuration scaffold.
+- `postcss.config.mjs`: Enables Tailwind PostCSS plugin.
+- `eslint.config.mjs`: ESLint setup using Next core-web-vitals + TypeScript presets.
+- `next-env.d.ts`: Next.js TypeScript generated references.
+- `.gitignore`: Ignore rules for Node/Next/env/build artifacts.
 
-1. Home page group list:
-   - Change page size to `5` and confirm request includes `pageSize=5`.
-   - Click page `2` and confirm request page increments correctly.
-   - Click Name `▲`/`▼` and confirm `sort=name,asc|desc`.
-   - Apply wildcard filter (e.g., `6*`) and confirm `name=6*` is sent.
-2. Group page expenses:
-   - Change page size and verify request uses `size=<selected>`.
-   - Click Amount `▲`/`▼` and verify `sort=amount,asc|desc`.
-3. Group page confirmed transfers:
-   - Set confirmation filter + page change and verify both `confirmationId` and pagination params are sent.
-4. Group page events:
-   - Click Date `▲`/`▼` and verify `sort=createdAt,asc|desc`.
-5. Ledger explanation:
-   - Reload group page and confirm explanation section loads.
-   - Select a member and confirm only that member's explanation is shown.
+### App shell
 
-## API expectations
+- `src/app/layout.tsx`: Global HTML layout wrapper + page metadata.
+- `src/app/globals.css`: Loads Tailwind base/components/utilities.
 
-The frontend expects the following backend endpoints (base URL from `NEXT_PUBLIC_API_BASE_URL`):
+### Home page (`/`)
 
-### Groups
+- `src/app/page.tsx`: Home page container; owns state, API calls, filtering/sorting/pagination, group create/rename flow.
+- `src/app/home/types.ts`: Home page types (`Group`, `CreateGroupResponse`).
+- `src/app/home/groupFilters.ts`: Group name wildcard filter helpers, member-count fallback extractor, page index converters.
+- `src/app/home/components/CreateGroupSection.tsx`: Create-group form and success/error/loading UI.
+- `src/app/home/components/ApiStatusSection.tsx`: Backend status display for `/` and `/health`.
+- `src/app/home/components/ExistingGroupsSection.tsx`: Group list UI with sort/filter/rename/pagination controls.
 
-- `GET /groups` (query params used by UI: `page`, `pageSize`, `sort`, `name`)
-  -> `{ items: [{ id, name?, memberCount? }], totalItems, totalPages, currentPage, pageSize }`
-- `POST /groups` expects `{ name }` -> `{ id, name? }`
-- `GET /groups/{groupId}` -> `{ id, name?, members: [{ id, name? }] }`
-- `PATCH /groups/{groupId}` -> `{ id, name?, members: [...] }`
+### Group page (`/groups/[groupId]`)
 
-### Members
+- `src/app/groups/[groupId]/page.tsx`: Composes tab UI and wires controller state/actions into tab components.
+- `src/app/groups/[groupId]/useGroupPageController.ts`: Main page controller hook; all group-page data fetching, mutations, state, pagination, sorting, validation, and derived view data.
+- `src/app/groups/[groupId]/types.ts`: Group-page domain models (members, expenses, settlements, ledger explanation, events, confirmed transfers).
+- `src/app/groups/[groupId]/groupPageUtils.ts`: Shared helpers for formatting, event payload diffing, ledger explanation normalization, split calculations, and page conversions.
+- `src/app/groups/[groupId]/components/GroupTabNav.tsx`: Tab-switch navigation bar.
+- `src/app/groups/[groupId]/components/MembersTab.tsx`: Rename group, add member, and member list UI.
+- `src/app/groups/[groupId]/components/ExpensesTab.tsx`: Add/edit/delete expense UI with split-mode-specific inputs and expense list pagination/sorting.
+- `src/app/groups/[groupId]/components/SettleTab.tsx`: Settlement suggestions, transfer confirmation, ledger snapshot, and owes lookup UI.
+- `src/app/groups/[groupId]/components/ExplainTab.tsx`: Per-member ledger explanation drilldown UI (expenses/transfers/contributions).
+- `src/app/groups/[groupId]/components/HistoryTab.tsx`: Confirmed transfers and expense-event audit views with sorting/pagination/filtering.
 
-- `POST /groups/{groupId}/members` expects `{ name }` -> `{ userId, name }`
+### Shared libraries and UI
 
-### Expenses
+- `src/lib/api.ts`: Typed fetch wrapper with base URL, JSON handling, error parsing, `Idempotency-Key` and `Confirmation-Id` header support, no-store cache policy.
+- `src/lib/pagination.ts`: Generic paginated API response/meta TypeScript types.
+- `src/components/ui/StatusBanner.tsx`: Reusable status banner component (`loading`, `empty`, `error`, `info`) with optional retry action.
+- `src/components/ui/PaginationControls.tsx`: Reusable paginated navigation (prev/next + compact page-number window).
 
-- `GET /groups/{groupId}/expenses` (query params used by UI: `page`, `size`, `sort`)
-  -> `{ items: [{ expenseId, groupId, description, amount, payerUserId, createdAt, splits: [{ userId, shareAmount }] }], totalItems, totalPages, currentPage, pageSize }`
-- `POST /groups/{groupId}/expenses` expects:
-  ```json
-  {
-    "description": "string",
-    "amount": "0.00",
-    "payerUserId": 0,
-    "participantUserIds": [0],
-    "shares": [1],
-    "exactAmounts": ["0.00"],
-    "percentages": ["0.00"]
-  }
-  ```
-  Notes: send only one split mode (exactAmounts, percentages, or shares). If none is provided, the backend uses equal split. `paidByUserId` is deprecated; use `payerUserId`.
-- `PATCH /groups/{groupId}/expenses/{expenseId}` -> updated expense response (200)
-- `DELETE /groups/{groupId}/expenses/{expenseId}` -> 204
+### Public assets
 
-### Settlements
-
-- `GET /groups/{groupId}/settlements` -> `{ transfers: [{ fromUserId, toUserId, amount }] }`
-- `POST /groups/{groupId}/settlements/confirm` -> `{ confirmationId, appliedTransfersCount }`
-  - Optional header: `Confirmation-Id: <uuid>` (overrides body `confirmationId` if body omits it)
-  ```json
-  {
-    "confirmationId": "string",
-    "transfers": [
-      { "fromUserId": 0, "toUserId": 0, "amount": 0 }
-    ]
-  }
-  ```
-  Notes: `confirmationId` is optional and can be used for idempotency.
-- `GET /groups/{groupId}/api/confirmation-id` -> `{ confirmationId }` (generate a confirmation id)
-
-### Ledger and analytics
-
-- `GET /groups/{groupId}/ledger` -> `{ entries: [{ userId, netBalance }] }`
-- `GET /groups/{groupId}/explanations/ledger` -> `{ explanations: [{ userId, netBalance, contributions: [...] }] }` (also supports compatible wrapped/legacy shapes)
-- `GET /groups/{groupId}/events` (query params used by UI: `page`, `size`, `sort`) -> `{ items: [{ eventId, groupId, expenseId, eventType, payload, createdAt }], totalItems, totalPages, currentPage, pageSize }`
-- `GET /groups/{groupId}/confirmed-transfers` (query params used by UI: `confirmationId`, `page`, `size`, `sort`) -> `{ items: [{ id, groupId, fromUserId, toUserId, amount, confirmationId, createdAt }], totalItems, totalPages, currentPage, pageSize }`
-- `GET /groups/{groupId}/owes?fromUserId=...&toUserId=...` -> `{ amount }`
-- `GET /groups/{groupId}/owes/historical?fromUserId=...&toUserId=...` -> `{ amount }`
-
-## Project structure
-
-- `src/app/page.tsx` - home (group list + create/rename)
-- `src/app/groups/[groupId]/page.tsx` - group details
+- `public/file.svg`: Generic file icon.
+- `public/globe.svg`: Globe icon.
+- `public/next.svg`: Next.js logo asset.
+- `public/vercel.svg`: Vercel logo asset.
+- `public/window.svg`: Window/browser icon.
 
 ## Notes
 
-- The UI is optimized for simple workflows and uses client-side data fetching.
-- UI page numbers are 1-based. Backend `currentPage` from Spring-style pageable responses is treated as 0-based and mapped in the frontend.
-- If your backend response shape differs, update the types in the page components.
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- UI pages are 1-based; backend pagination is handled via conversion helpers where needed.
+- Group name filtering supports both substring and wildcard matching.
+- Ledger explanation parser is defensive and supports multiple backend response shapes.
+- Confirm-transfer flow supports idempotency via confirmation ID.
