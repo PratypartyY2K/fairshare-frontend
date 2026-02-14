@@ -1,228 +1,38 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { api } from "../../../lib/api";
 import type { PaginatedResponse } from "../../../lib/pagination";
-
-type Member = {
-  id: number;
-  name?: string;
-};
-
-type GroupResponse = {
-  id: number;
-  name?: string;
-  members: Member[];
-};
-
-type Split = {
-  userId: number;
-  shareAmount: string;
-};
-
-type Expense = {
-  expenseId: number;
-  groupId: number;
-  description: string;
-  amount: string;
-  payerUserId: number;
-  createdAt?: string;
-  splits?: Split[];
-};
-
-type SettlementTransfer = {
-  fromUserId: number;
-  toUserId: number;
-  amount: string;
-};
-
-type LedgerEntry = {
-  userId: number;
-  netBalance: string;
-};
-
-type LedgerExplanationTransfer = {
-  transferId?: number;
-  fromUserId: number;
-  toUserId: number;
-  amount: string;
-  createdAt?: string;
-};
-
-type LedgerExplanationExpense = {
-  expenseId?: number;
-  description?: string;
-  amount?: string;
-  payerUserId?: number;
-  createdAt?: string;
-  splits?: Split[];
-};
-
-type LedgerExplanationEntry = {
-  userId: number;
-  netBalance?: string;
-  expenses?: LedgerExplanationExpense[];
-  contributingExpenses?: LedgerExplanationExpense[];
-  transfers?: LedgerExplanationTransfer[];
-  contributingTransfers?: LedgerExplanationTransfer[];
-  transfersIn?: LedgerExplanationTransfer[];
-  transfersOut?: LedgerExplanationTransfer[];
-  contributions?: Array<{
-    type?: string;
-    amount?: string;
-    description?: string;
-    timestamp?: string;
-    referenceId?: number;
-  }>;
-};
-
-type LedgerExplanationResponse = {
-  entries?: LedgerExplanationEntry[];
-  users?: LedgerExplanationEntry[];
-  items?: LedgerExplanationEntry[];
-  explanations?: LedgerExplanationEntry[];
-  data?: LedgerExplanationResponse | LedgerExplanationEntry[];
-  result?: LedgerExplanationResponse | LedgerExplanationEntry[];
-  payload?: LedgerExplanationResponse | LedgerExplanationEntry[];
-  [key: string]: unknown;
-};
-
-type EventResponse = {
-  eventId: number;
-  groupId: number;
-  expenseId?: number;
-  eventType: string;
-  payload: string;
-  createdAt: string;
-};
-
-type ConfirmedTransfer = {
-  id: number;
-  groupId: number;
-  fromUserId: number;
-  toUserId: number;
-  amount: string;
-  confirmationId?: string;
-  createdAt: string;
-};
-
-type BannerVariant = "loading" | "empty" | "error" | "info";
-type GroupTab = "members" | "expenses" | "settle" | "explain" | "history";
-
-function StatusBanner({
-  variant,
-  message,
-  onRetry,
-}: {
-  variant: BannerVariant;
-  message: string;
-  onRetry?: () => void;
-}) {
-  const styles = {
-    loading: "border-slate-200 bg-slate-50 text-slate-700",
-    empty: "border-amber-200 bg-amber-50 text-amber-800",
-    error: "border-rose-200 bg-rose-50 text-rose-700",
-    info: "border-sky-200 bg-sky-50 text-sky-700",
-  }[variant];
-  const icon = {
-    loading: "⏳",
-    empty: "🗂️",
-    error: "⚠️",
-    info: "ℹ️",
-  }[variant];
-
-  return (
-    <div
-      className={`mt-3 flex items-start justify-between gap-3 rounded-xl border px-3 py-2 text-sm ${styles}`}
-    >
-      <div className="flex items-start gap-2">
-        <span aria-hidden="true">{icon}</span>
-        <span>{message}</span>
-      </div>
-      {onRetry && (
-        <button onClick={onRetry} className="text-xs underline">
-          Retry
-        </button>
-      )}
-    </div>
-  );
-}
-
-function getVisiblePages(currentPage: number, totalPages: number) {
-  const pages = new Set<number>([
-    1,
-    totalPages,
-    currentPage - 1,
-    currentPage,
-    currentPage + 1,
-  ]);
-  return Array.from(pages)
-    .filter((page) => page >= 1 && page <= totalPages)
-    .sort((a, b) => a - b);
-}
-
-function toApiPage(uiPage: number) {
-  return Math.max(0, uiPage - 1);
-}
-
-function toUiPage(apiPage: number) {
-  return Math.max(1, apiPage + 1);
-}
-
-function PaginationControls({
-  currentPage,
-  totalPages,
-  loading,
-  onPageChange,
-}: {
-  currentPage: number;
-  totalPages: number;
-  loading: boolean;
-  onPageChange: (page: number) => void;
-}) {
-  if (totalPages <= 1) return null;
-  const visiblePages = getVisiblePages(currentPage, totalPages);
-
-  return (
-    <div className="mt-3 flex items-center justify-end gap-2 text-xs">
-      <button
-        onClick={() => onPageChange(currentPage - 1)}
-        disabled={loading || currentPage <= 1}
-        className="rounded-xl border border-slate-300 bg-white px-3 py-1 disabled:opacity-50"
-      >
-        Previous
-      </button>
-      {visiblePages.map((page, index) => {
-        const showGap = index > 0 && visiblePages[index - 1] < page - 1;
-        return (
-          <span key={`page-${page}`} className="flex items-center gap-2">
-            {showGap && <span className="text-slate-400">…</span>}
-            <button
-              onClick={() => onPageChange(page)}
-              disabled={loading}
-              className={`rounded-xl border px-3 py-1 disabled:opacity-50 ${
-                page === currentPage
-                  ? "border-slate-900 bg-slate-900 font-semibold text-white ring-2 ring-slate-300"
-                  : "border-slate-300 bg-white text-slate-700"
-              }`}
-            >
-              {page}
-            </button>
-          </span>
-        );
-      })}
-      <button
-        onClick={() => onPageChange(currentPage + 1)}
-        disabled={loading || currentPage >= totalPages}
-        className="rounded-xl border border-slate-300 bg-white px-3 py-1 disabled:opacity-50"
-      >
-        Next
-      </button>
-    </div>
-  );
-}
+import { PaginationControls } from "../../../components/ui/PaginationControls";
+import { StatusBanner } from "../../../components/ui/StatusBanner";
+import {
+  buildMemberValueMap,
+  formatAmount,
+  formatContributionDescription,
+  formatEventPayload,
+  formatMoney,
+  getLedgerExplanationEntries,
+  getLedgerWhyParts,
+  getMemberName,
+  getRemainingAmount,
+  getShortTimeZoneLabel,
+  getTransferKey,
+  toApiPage,
+  toUiPage,
+} from "./groupPageUtils";
+import type {
+  ConfirmedTransfer,
+  EventResponse,
+  Expense,
+  GroupResponse,
+  GroupTab,
+  LedgerEntry,
+  LedgerExplanationResponse,
+  Member,
+  SettlementTransfer,
+} from "./types";
 
 export default function GroupPage() {
   const defaultPageSize = 10;
@@ -383,545 +193,11 @@ export default function GroupPage() {
     return activeTab === tab ? cardClassName : `${cardClassName} hidden`;
   }
 
-  function getMemberName(member: Member) {
-    return member.name?.trim() || "Member";
-  }
-
-  function getTransferKey(transfer: SettlementTransfer) {
-    const amount = Number(transfer.amount);
-    const normalized = Number.isFinite(amount) ? amount.toFixed(2) : "0.00";
-    return `${transfer.fromUserId}-${transfer.toUserId}-${normalized}`;
-  }
-
-  function formatAmount(value: number) {
-    return value.toFixed(2);
-  }
-
-  function formatMoney(value?: string | number) {
-    const numeric = Number(value);
-    if (Number.isFinite(numeric)) return `$${numeric.toFixed(2)}`;
-    if (value === undefined || value === null || value === "") return "—";
-    return `$${value}`;
-  }
-
-  function formatEventFieldLabel(key: string) {
-    const normalized = key
-      .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-      .replace(/_/g, " ")
-      .trim();
-    if (!normalized) return "Details";
-    return normalized.charAt(0).toUpperCase() + normalized.slice(1);
-  }
-
-  function isRecord(value: unknown): value is Record<string, unknown> {
-    return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-  }
-
-  function parseJsonRecord(value: unknown): Record<string, unknown> | null {
-    if (isRecord(value)) return value;
-    if (typeof value !== "string") return null;
-    try {
-      const parsed = JSON.parse(value);
-      return isRecord(parsed) ? parsed : null;
-    } catch {
-      return null;
-    }
-  }
-
-  function stripExpenseIds(value: unknown): unknown {
-    if (Array.isArray(value)) return value.map(stripExpenseIds);
-    if (isRecord(value)) {
-      return Object.fromEntries(
-        Object.entries(value)
-          .filter(([key]) => key !== "expenseId")
-          .map(([key, nested]) => [key, stripExpenseIds(nested)]),
-      );
-    }
-    return value;
-  }
-
-  function formatUserById(value: string | number) {
-    const numeric =
-      typeof value === "number" ? value : Number.parseInt(String(value), 10);
-    if (!Number.isFinite(numeric)) return String(value);
-    const member = members.find((m) => m.id === numeric);
-    return member ? getMemberName(member) : `User #${numeric}`;
-  }
-
-  function formatEventFieldValue(key: string, value: unknown) {
-    if (value === undefined || value === null) return "—";
-    const lowerKey = key.toLowerCase();
-
-    if (lowerKey.includes("amount")) {
-      if (typeof value === "number" || typeof value === "string") {
-        return formatMoney(value);
-      }
-    }
-
-    if (lowerKey.endsWith("userid")) {
-      if (typeof value === "number" || typeof value === "string") {
-        return formatUserById(value);
-      }
-    }
-
-    if (lowerKey.endsWith("userids") && Array.isArray(value)) {
-      return value
-        .map((item) =>
-          typeof item === "number" || typeof item === "string"
-            ? formatUserById(item)
-            : String(item),
-        )
-        .join(", ");
-    }
-
-    if (typeof value === "object") {
-      return JSON.stringify(stripExpenseIds(value));
-    }
-
-    return String(value);
-  }
-
-  function areEventValuesEqual(left: unknown, right: unknown) {
-    return (
-      JSON.stringify(stripExpenseIds(left)) ===
-      JSON.stringify(stripExpenseIds(right))
-    );
-  }
-
-  function formatSignedMoney(value: number) {
-    const abs = Math.abs(value);
-    return `${value >= 0 ? "+" : "-"}$${abs.toFixed(2)}`;
-  }
-
-  function getUserOwesLabel(value: number) {
-    if (Math.abs(value) < 0.005) return "settled";
-    if (value > 0) return `owes ${formatMoney(value)}`;
-    return `is owed ${formatMoney(Math.abs(value))}`;
-  }
-
-  function getSplitUserId(split: unknown): number | null {
-    if (!isRecord(split)) return null;
-    const raw =
-      split.userId ?? split.user_id ?? split.memberId ?? split.member_id;
-    const id = Number(raw);
-    return Number.isFinite(id) ? id : null;
-  }
-
-  function getSplitAmountValue(split: unknown): number | null {
-    if (!isRecord(split)) return null;
-    const raw =
-      split.shareAmount ??
-      split.share_amount ??
-      split.amount ??
-      split.value ??
-      split.share;
-    const amount = Number(raw);
-    return Number.isFinite(amount) ? amount : null;
-  }
-
-  function getExpenseOwesByUser(value: unknown): Map<number, number> | null {
-    if (!isRecord(value)) return null;
-
-    const payerUserId = Number(value.payerUserId);
-    const amount = Number(value.amount);
-    if (!Number.isFinite(payerUserId) || !Number.isFinite(amount)) return null;
-
-    const shareByUser = getSplitSharesByUser(value);
-    if (!shareByUser || shareByUser.size === 0) return null;
-
-    const owesByUser = new Map<number, number>();
-    owesByUser.set(payerUserId, -amount);
-
-    for (const [splitUserId, splitAmount] of shareByUser.entries()) {
-      owesByUser.set(
-        splitUserId,
-        (owesByUser.get(splitUserId) ?? 0) + splitAmount,
-      );
-    }
-
-    return owesByUser;
-  }
-
-  function getOwesDiffLines(beforeValue: unknown, afterValue: unknown) {
-    const beforeOwes = getExpenseOwesByUser(beforeValue);
-    const afterOwes = getExpenseOwesByUser(afterValue);
-    if (!beforeOwes || !afterOwes) return [] as string[];
-
-    const allUserIds = Array.from(
-      new Set([...beforeOwes.keys(), ...afterOwes.keys()]),
-    ).sort((a, b) => a - b);
-
-    const lines = allUserIds
-      .map((userId) => {
-        const before = beforeOwes.get(userId) ?? 0;
-        const after = afterOwes.get(userId) ?? 0;
-        if (Math.abs(before - after) < 0.005) return null;
-
-        const member = members.find((m) => m.id === userId);
-        const label = member ? getMemberName(member) : `User #${userId}`;
-        const delta = after - before;
-        return `${label}: ${getUserOwesLabel(before)} -> ${getUserOwesLabel(after)} (delta ${formatSignedMoney(delta)})`;
-      })
-      .filter((line): line is string => Boolean(line));
-
-    return lines;
-  }
-
-  function getSplitSharesByUser(value: unknown): Map<number, number> | null {
-    if (!isRecord(value)) return null;
-
-    const sharesByUser = new Map<number, number>();
-
-    if (Array.isArray(value.splits)) {
-      for (const split of value.splits) {
-        const userId = getSplitUserId(split);
-        const shareAmount = getSplitAmountValue(split);
-        if (userId === null || shareAmount === null) continue;
-        sharesByUser.set(userId, shareAmount);
-      }
-      if (sharesByUser.size > 0) return sharesByUser;
-    }
-
-    const participantUserIds = Array.isArray(value.participantUserIds)
-      ? value.participantUserIds
-          .map((id) => Number(id))
-          .filter((id) => Number.isFinite(id))
-      : [];
-
-    if (
-      Array.isArray(value.exactAmounts) &&
-      participantUserIds.length === value.exactAmounts.length
-    ) {
-      value.exactAmounts.forEach((amount, index) => {
-        const userId = participantUserIds[index];
-        const shareAmount = Number(amount);
-        if (Number.isFinite(userId) && Number.isFinite(shareAmount)) {
-          sharesByUser.set(userId, shareAmount);
-        }
-      });
-      if (sharesByUser.size > 0) return sharesByUser;
-    }
-
-    const totalAmount = Number(value.amount);
-    if (
-      Number.isFinite(totalAmount) &&
-      Array.isArray(value.percentages) &&
-      participantUserIds.length === value.percentages.length
-    ) {
-      value.percentages.forEach((percentage, index) => {
-        const userId = participantUserIds[index];
-        const pct = Number(percentage);
-        if (Number.isFinite(userId) && Number.isFinite(pct)) {
-          sharesByUser.set(userId, (totalAmount * pct) / 100);
-        }
-      });
-      if (sharesByUser.size > 0) return sharesByUser;
-    }
-
-    if (
-      Number.isFinite(totalAmount) &&
-      Array.isArray(value.shares) &&
-      participantUserIds.length === value.shares.length
-    ) {
-      const shareCounts = value.shares.map((count) => Number(count));
-      const totalShares = shareCounts.reduce(
-        (sum, count) => sum + (Number.isFinite(count) ? count : 0),
-        0,
-      );
-      if (totalShares > 0) {
-        shareCounts.forEach((count, index) => {
-          const userId = participantUserIds[index];
-          if (Number.isFinite(userId) && Number.isFinite(count)) {
-            sharesByUser.set(userId, (totalAmount * count) / totalShares);
-          }
-        });
-        if (sharesByUser.size > 0) return sharesByUser;
-      }
-    }
-
-    const splitByUser = value.splitByUserId ?? value.sharesByUserId;
-    if (isRecord(splitByUser)) {
-      for (const [rawUserId, rawAmount] of Object.entries(splitByUser)) {
-        const userId = Number(rawUserId);
-        const shareAmount = Number(rawAmount);
-        if (Number.isFinite(userId) && Number.isFinite(shareAmount)) {
-          sharesByUser.set(userId, shareAmount);
-        }
-      }
-      if (sharesByUser.size > 0) return sharesByUser;
-    }
-
-    return null;
-  }
-
-  function getSplitDiffLines(beforeValue: unknown, afterValue: unknown) {
-    const beforeShares = getSplitSharesByUser(beforeValue);
-    const afterShares = getSplitSharesByUser(afterValue);
-    if (!beforeShares || !afterShares) return [] as string[];
-
-    const allUserIds = Array.from(
-      new Set([...beforeShares.keys(), ...afterShares.keys()]),
-    ).sort((a, b) => a - b);
-
-    return allUserIds
-      .map((userId) => {
-        const before = beforeShares.get(userId) ?? 0;
-        const after = afterShares.get(userId) ?? 0;
-        if (Math.abs(before - after) < 0.005) return null;
-
-        const member = members.find((m) => m.id === userId);
-        const label = member ? getMemberName(member) : `User #${userId}`;
-        const delta = after - before;
-        return `${label}: ${formatMoney(before)} -> ${formatMoney(after)} (delta ${formatSignedMoney(delta)})`;
-      })
-      .filter((line): line is string => Boolean(line));
-  }
-
-  function buildEventDiffLines(
-    beforeValue: unknown,
-    afterValue: unknown,
-    path: string[] = [],
-  ): string[] {
-    if (isRecord(beforeValue) && isRecord(afterValue)) {
-      const keys = Array.from(
-        new Set([...Object.keys(beforeValue), ...Object.keys(afterValue)]),
-      ).filter((key) => key !== "expenseId");
-
-      return keys.flatMap((key) =>
-        buildEventDiffLines(beforeValue[key], afterValue[key], [...path, key]),
-      );
-    }
-
-    if (areEventValuesEqual(beforeValue, afterValue)) return [];
-    const label =
-      path.length > 0
-        ? path.map((segment) => formatEventFieldLabel(segment)).join(" ")
-        : "Value";
-    const leafKey = path[path.length - 1] ?? "value";
-    return [
-      `${label}: ${formatEventFieldValue(leafKey, beforeValue)} -> ${formatEventFieldValue(leafKey, afterValue)}`,
-    ];
-  }
-
-  function formatEventPayload(payload: string) {
-    try {
-      const parsed = JSON.parse(payload) as Record<string, unknown>;
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-        return payload;
-      }
-
-      const beforeValue = parseJsonRecord(parsed.before ?? parsed.Before);
-      const afterValue = parseJsonRecord(parsed.after ?? parsed.After);
-      if (isRecord(beforeValue) && isRecord(afterValue)) {
-        const diffLines = buildEventDiffLines(beforeValue, afterValue);
-        const splitDiffLines = getSplitDiffLines(beforeValue, afterValue);
-        const owesDiffLines = getOwesDiffLines(beforeValue, afterValue);
-        if (
-          diffLines.length === 0 &&
-          splitDiffLines.length === 0 &&
-          owesDiffLines.length === 0
-        ) {
-          return "No dispute-impacting changes found.";
-        }
-
-        const sections: string[] = [];
-        if (splitDiffLines.length > 0) {
-          sections.push("Split changes per person:");
-          sections.push(...splitDiffLines);
-        }
-        if (owesDiffLines.length > 0) {
-          sections.push("Owes changes:");
-          sections.push(...owesDiffLines);
-        }
-        if (diffLines.length > 0) {
-          sections.push("Field changes:");
-          sections.push(...diffLines);
-        }
-
-        return sections.join("\n");
-      }
-
-      const lines = Object.entries(parsed)
-        .filter(([key]) => key !== "expenseId")
-        .flatMap(([key, value]) => {
-          const label = formatEventFieldLabel(key);
-          if (isRecord(value)) {
-            const nestedEntries = Object.entries(
-              stripExpenseIds(value) as Record<string, unknown>,
-            );
-            if (nestedEntries.length === 0) return `${label}: —`;
-            return nestedEntries.map(([nestedKey, nestedValue]) => {
-              const nestedLabel = formatEventFieldLabel(nestedKey);
-              return `${label} ${nestedLabel}: ${formatEventFieldValue(
-                nestedKey,
-                nestedValue,
-              )}`;
-            });
-          }
-          return `${label}: ${formatEventFieldValue(key, value)}`;
-        });
-
-      return lines.length > 0 ? lines.join("\n") : "No additional details";
-    } catch {
-      return payload;
-    }
-  }
-
-  function getShortTimeZoneLabel(dateInput: string) {
-    const date = new Date(dateInput);
-    const part = new Intl.DateTimeFormat("en-US", {
-      timeZoneName: "short",
-    })
-      .formatToParts(date)
-      .find((p) => p.type === "timeZoneName");
-    return part?.value ?? "Local";
-  }
-
-  function getLedgerExplanationEntries(
-    explanation: LedgerExplanationResponse | null,
-  ) {
-    if (!explanation) return [];
-
-    const candidates = [
-      explanation.entries,
-      explanation.users,
-      explanation.items,
-      explanation.explanations,
-      Array.isArray(explanation.data) ? explanation.data : undefined,
-      Array.isArray(explanation.result) ? explanation.result : undefined,
-      Array.isArray(explanation.payload) ? explanation.payload : undefined,
-    ];
-    const directList = candidates.find((candidate) => Array.isArray(candidate));
-    if (Array.isArray(directList)) return directList;
-
-    const nested =
-      (explanation.data && !Array.isArray(explanation.data)
-        ? getLedgerExplanationEntries(
-            explanation.data as LedgerExplanationResponse,
-          )
-        : []) ||
-      (explanation.result && !Array.isArray(explanation.result)
-        ? getLedgerExplanationEntries(
-            explanation.result as LedgerExplanationResponse,
-          )
-        : []) ||
-      (explanation.payload && !Array.isArray(explanation.payload)
-        ? getLedgerExplanationEntries(
-            explanation.payload as LedgerExplanationResponse,
-          )
-        : []);
-    if (Array.isArray(nested) && nested.length > 0) return nested;
-
-    // Support map-like responses: { "12": {...entry without userId...}, "34": {...} }
-    const mapped = Object.entries(explanation)
-      .filter(([key, value]) => {
-        if (!value || typeof value !== "object" || Array.isArray(value))
-          return false;
-        return key !== "data" && key !== "result" && key !== "payload";
-      })
-      .map(([key, value]) => {
-        const entry = value as LedgerExplanationEntry;
-        const parsedUserId = Number(key);
-        return {
-          ...entry,
-          userId: Number.isFinite(entry.userId)
-            ? entry.userId
-            : Number.isFinite(parsedUserId)
-              ? parsedUserId
-              : -1,
-        } satisfies LedgerExplanationEntry;
-      })
-      .filter((entry) => entry.userId >= 0);
-    if (mapped.length > 0) return mapped;
-
-    return [];
-  }
-
-  function getLedgerWhyParts(entry: LedgerExplanationEntry) {
-    const parts: string[] = [];
-    const expenses = entry.expenses ?? entry.contributingExpenses ?? [];
-    const transfersIn = entry.transfersIn ?? [];
-    const transfersOut = entry.transfersOut ?? [];
-    const transfers = entry.transfers ?? entry.contributingTransfers ?? [];
-    const contributions = entry.contributions ?? [];
-
-    if (expenses.length > 0) {
-      parts.push(
-        `${expenses.length} expense${expenses.length === 1 ? "" : "s"}`,
-      );
-    }
-
-    if (transfersIn.length > 0 || transfersOut.length > 0) {
-      parts.push(
-        `${transfersIn.length} incoming / ${transfersOut.length} outgoing transfer${transfersIn.length + transfersOut.length === 1 ? "" : "s"}`,
-      );
-    } else if (transfers.length > 0) {
-      parts.push(
-        `${transfers.length} transfer${transfers.length === 1 ? "" : "s"}`,
-      );
-    }
-
-    const reasons = contributions
-      .map((contribution) =>
-        formatContributionDescription(contribution.description),
-      )
-      .filter((reason) => reason !== "—")
-      .slice(0, 2);
-    if (reasons.length > 0) {
-      parts.push(reasons.join(" • "));
-    }
-
-    return parts;
-  }
-
-  function formatContributionDescription(description?: string) {
-    if (!description?.trim()) return "—";
-    return description.replace(/user\s+#?(\d+)/gi, (_, userIdText: string) => {
-      const userId = Number(userIdText);
-      if (!Number.isFinite(userId)) return `user ${userIdText}`;
-      const member = members.find((m) => m.id === userId);
-      return member ? getMemberName(member) : `User #${userId}`;
-    });
-  }
-
-  function getRemainingAmount(
-    total: string,
-    amounts: Record<number, string>,
-    ids: number[],
-  ) {
-    const totalValue = Number(total);
-    if (!Number.isFinite(totalValue)) return null;
-    const sum = ids.reduce((acc, id) => {
-      const value = Number(amounts[id] ?? "");
-      return acc + (Number.isFinite(value) ? value : 0);
-    }, 0);
-    return totalValue - sum;
-  }
-
-  function generateUuid() {
-    if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-      return crypto.randomUUID();
-    }
-    const bytes = Array.from({ length: 16 }, () =>
-      Math.floor(Math.random() * 256),
-    );
-    bytes[6] = (bytes[6] & 0x0f) | 0x40;
-    bytes[8] = (bytes[8] & 0x3f) | 0x80;
-    return bytes
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("")
-      .replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, "$1-$2-$3-$4-$5");
-  }
-
-  function buildMemberValueMap(
-    membersList: Member[],
-    seed: Record<number, string> = {},
-  ) {
-    return membersList.reduce<Record<number, string>>((acc, member) => {
-      acc[member.id] = seed[member.id] ?? "";
-      return acc;
-    }, {});
-  }
+  const memberNameById = useMemo(
+    () =>
+      new Map(members.map((member) => [member.id, getMemberName(member)] as const)),
+    [members],
+  );
 
   async function confirmPaidTransfer(transfer: SettlementTransfer) {
     const key = getTransferKey(transfer);
@@ -1053,7 +329,7 @@ export default function GroupPage() {
       .finally(() => {
         setLoadingConfirmedTransfers(false);
       });
-  }, [groupId]);
+  }, [groupId, loadEvents, loadExpenses]);
 
   useEffect(() => {
     setExactAmounts((prev) => buildMemberValueMap(members, prev));
@@ -1189,47 +465,50 @@ export default function GroupPage() {
     }
   }
 
-  async function loadExpenses(
-    gid: number,
-    page = expensesPage,
-    pageSize = expensesPageSize,
-    sort = expensesSort,
-  ) {
-    setLoadingExpenses(true);
-    setExpensesError(null);
-    try {
-      const query = new URLSearchParams({
-        page: String(toApiPage(page)),
-        size: String(pageSize),
-        sort,
-      });
-      const res = await api<PaginatedResponse<Expense>>(
-        `/groups/${gid}/expenses?${query.toString()}`,
-      );
-      setExpenses(res.items ?? []);
-      setExpensesPage(
-        Number.isFinite(res.currentPage) && res.currentPage >= 0
-          ? toUiPage(res.currentPage)
-          : page,
-      );
-      setExpensesTotalPages(
-        Number.isFinite(res.totalPages) && res.totalPages > 0
-          ? res.totalPages
-          : 1,
-      );
-      setExpensesTotalItems(
-        Number.isFinite(res.totalItems) && res.totalItems >= 0
-          ? res.totalItems
-          : 0,
-      );
-    } catch (e: unknown) {
-      setExpensesError(
-        e instanceof Error ? e.message : "Failed to load expenses",
-      );
-    } finally {
-      setLoadingExpenses(false);
-    }
-  }
+  const loadExpenses = useCallback(
+    async function (
+      gid: number,
+      page = expensesPage,
+      pageSize = expensesPageSize,
+      sort = expensesSort,
+    ) {
+      setLoadingExpenses(true);
+      setExpensesError(null);
+      try {
+        const query = new URLSearchParams({
+          page: String(toApiPage(page)),
+          size: String(pageSize),
+          sort,
+        });
+        const res = await api<PaginatedResponse<Expense>>(
+          `/groups/${gid}/expenses?${query.toString()}`,
+        );
+        setExpenses(res.items ?? []);
+        setExpensesPage(
+          Number.isFinite(res.currentPage) && res.currentPage >= 0
+            ? toUiPage(res.currentPage)
+            : page,
+        );
+        setExpensesTotalPages(
+          Number.isFinite(res.totalPages) && res.totalPages > 0
+            ? res.totalPages
+            : 1,
+        );
+        setExpensesTotalItems(
+          Number.isFinite(res.totalItems) && res.totalItems >= 0
+            ? res.totalItems
+            : 0,
+        );
+      } catch (e: unknown) {
+        setExpensesError(
+          e instanceof Error ? e.message : "Failed to load expenses",
+        );
+      } finally {
+        setLoadingExpenses(false);
+      }
+    },
+    [expensesPage, expensesPageSize, expensesSort],
+  );
 
   async function loadSettlements(gid: number) {
     setLoadingSettlements(true);
@@ -1280,45 +559,48 @@ export default function GroupPage() {
     }
   }
 
-  async function loadEvents(
-    gid: number,
-    page = eventsPage,
-    pageSize = eventsPageSize,
-    sort = eventsSort,
-  ) {
-    setLoadingEvents(true);
-    setEventsError(null);
-    try {
-      const query = new URLSearchParams({
-        page: String(toApiPage(page)),
-        size: String(pageSize),
-        sort,
-      });
-      const res = await api<PaginatedResponse<EventResponse>>(
-        `/groups/${gid}/events?${query.toString()}`,
-      );
-      setEvents(res.items ?? []);
-      setEventsPage(
-        Number.isFinite(res.currentPage) && res.currentPage >= 0
-          ? toUiPage(res.currentPage)
-          : page,
-      );
-      setEventsTotalPages(
-        Number.isFinite(res.totalPages) && res.totalPages > 0
-          ? res.totalPages
-          : 1,
-      );
-      setEventsTotalItems(
-        Number.isFinite(res.totalItems) && res.totalItems >= 0
-          ? res.totalItems
-          : 0,
-      );
-    } catch (e: unknown) {
-      setEventsError(e instanceof Error ? e.message : "Failed to load events");
-    } finally {
-      setLoadingEvents(false);
-    }
-  }
+  const loadEvents = useCallback(
+    async (
+      gid: number,
+      page = eventsPage,
+      pageSize = eventsPageSize,
+      sort = eventsSort,
+    ) => {
+      setLoadingEvents(true);
+      setEventsError(null);
+      try {
+        const query = new URLSearchParams({
+          page: String(toApiPage(page)),
+          size: String(pageSize),
+          sort,
+        });
+        const res = await api<PaginatedResponse<EventResponse>>(
+          `/groups/${gid}/events?${query.toString()}`,
+        );
+        setEventsPage(
+          Number.isFinite(res.currentPage) && res.currentPage >= 0
+            ? toUiPage(res.currentPage)
+            : page,
+        );
+        setEventsTotalPages(
+          Number.isFinite(res.totalPages) && res.totalPages > 0
+            ? res.totalPages
+            : 1,
+        );
+        setEventsTotalItems(
+          Number.isFinite(res.totalItems) && res.totalItems >= 0
+            ? res.totalItems
+            : 0,
+        );
+        setEvents(res.items ?? []);
+      } catch (e: unknown) {
+        setEventsError(e instanceof Error ? e.message : "Failed to load events");
+      } finally {
+        setLoadingEvents(false);
+      }
+    },
+    [eventsPage, eventsPageSize, eventsSort],
+  );
 
   async function loadConfirmedTransfers(
     gid: number,
@@ -2127,7 +1409,7 @@ export default function GroupPage() {
                 </button>
               </div>
             </div>
-          </div>
+                   </div>
 
           {loadingExpenses && (
             <StatusBanner variant="loading" message="Loading expenses..." />
@@ -2255,6 +1537,7 @@ export default function GroupPage() {
                   currentPage={expensesPage}
                   totalPages={expensesTotalPages}
                   loading={loadingExpenses}
+                  className="mt-3 flex items-center justify-end gap-2 text-xs"
                   onPageChange={(page) =>
                     Number.isFinite(groupId) && void loadExpenses(groupId, page)
                   }
@@ -2683,7 +1966,7 @@ export default function GroupPage() {
                   : `User #${entry.userId}`;
                 const explanation = ledgerExplanationByUserId.get(entry.userId);
                 const whyParts = explanation
-                  ? getLedgerWhyParts(explanation)
+                  ? getLedgerWhyParts(explanation, memberNameById)
                   : [];
                 const whyText = explanation
                   ? whyParts.length > 0
@@ -2768,7 +2051,9 @@ export default function GroupPage() {
                   className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
                   value={currentUserId}
                   onChange={(e) =>
-                    setCurrentUserId(e.target.value ? Number(e.target.value) : "")
+                    setCurrentUserId(
+                      e.target.value ? Number(e.target.value) : "",
+                    )
                   }
                 >
                   <option value="">Select current user</option>
@@ -3072,6 +2357,7 @@ export default function GroupPage() {
                                       <div className="text-xs text-slate-600">
                                         {formatContributionDescription(
                                           contribution.description,
+                                          memberNameById,
                                         )}
                                       </div>
                                     </div>
@@ -3215,96 +2501,84 @@ export default function GroupPage() {
               Confirmed transfers
             </h2>
             <div className="flex items-center gap-2">
-              <div className="flex items-center gap-3 text-xs text-slate-600">
-                <div className="flex items-center gap-1">
-                  <span>Date</span>
-                  <button
-                    className={`rounded border px-1 leading-none ${confirmedTransfersSort === "createdAt,asc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
-                    onClick={() => {
-                      setConfirmedTransfersSort("createdAt,asc");
-                      if (Number.isFinite(groupId)) {
-                        void loadConfirmedTransfers(
-                          groupId,
-                          1,
-                          confirmedTransfersPageSize,
-                          "createdAt,asc",
-                        );
-                      }
-                    }}
-                    disabled={loadingConfirmedTransfers}
-                    aria-label="Sort confirmed transfers by date ascending"
-                  >
-                    ▲
-                  </button>
-                  <button
-                    className={`rounded border px-1 leading-none ${confirmedTransfersSort === "createdAt,desc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
-                    onClick={() => {
-                      setConfirmedTransfersSort("createdAt,desc");
-                      if (Number.isFinite(groupId)) {
-                        void loadConfirmedTransfers(
-                          groupId,
-                          1,
-                          confirmedTransfersPageSize,
-                          "createdAt,desc",
-                        );
-                      }
-                    }}
-                    disabled={loadingConfirmedTransfers}
-                    aria-label="Sort confirmed transfers by date descending"
-                  >
-                    ▼
-                  </button>
-                </div>
-                <div className="flex items-center gap-1">
-                  <span>Amount</span>
-                  <button
-                    className={`rounded border px-1 leading-none ${confirmedTransfersSort === "amount,asc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
-                    onClick={() => {
-                      setConfirmedTransfersSort("amount,asc");
-                      if (Number.isFinite(groupId)) {
-                        void loadConfirmedTransfers(
-                          groupId,
-                          1,
-                          confirmedTransfersPageSize,
-                          "amount,asc",
-                        );
-                      }
-                    }}
-                    disabled={loadingConfirmedTransfers}
-                    aria-label="Sort confirmed transfers by amount ascending"
-                  >
-                    ▲
-                  </button>
-                  <button
-                    className={`rounded border px-1 leading-none ${confirmedTransfersSort === "amount,desc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
-                    onClick={() => {
-                      setConfirmedTransfersSort("amount,desc");
-                      if (Number.isFinite(groupId)) {
-                        void loadConfirmedTransfers(
-                          groupId,
-                          1,
-                          confirmedTransfersPageSize,
-                          "amount,desc",
-                        );
-                      }
-                    }}
-                    disabled={loadingConfirmedTransfers}
-                    aria-label="Sort confirmed transfers by amount descending"
-                  >
-                    ▼
-                  </button>
-                </div>
+              <div className="flex items-center gap-1 text-xs text-slate-600">
+                <span>Date</span>
+                <button
+                  className={`rounded border px-1 leading-none ${confirmedTransfersSort === "createdAt,asc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
+                  onClick={() => {
+                    setConfirmedTransfersSort("createdAt,asc");
+                    if (Number.isFinite(groupId)) {
+                      void loadConfirmedTransfers(
+                        groupId,
+                        1,
+                        confirmedTransfersPageSize,
+                        "createdAt,asc",
+                      );
+                    }
+                  }}
+                  disabled={loadingConfirmedTransfers}
+                  aria-label="Sort confirmed transfers by date ascending"
+                >
+                  ▲
+                </button>
+                <button
+                  className={`rounded border px-1 leading-none ${confirmedTransfersSort === "createdAt,desc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
+                  onClick={() => {
+                    setConfirmedTransfersSort("createdAt,desc");
+                    if (Number.isFinite(groupId)) {
+                      void loadConfirmedTransfers(
+                        groupId,
+                        1,
+                        confirmedTransfersPageSize,
+                        "createdAt,desc",
+                      );
+                    }
+                  }}
+                  disabled={loadingConfirmedTransfers}
+                  aria-label="Sort confirmed transfers by date descending"
+                >
+                  ▼
+                </button>
               </div>
-              <button
-                className="text-xs font-medium text-slate-600 underline"
-                onClick={() =>
-                  Number.isFinite(groupId) &&
-                  loadConfirmedTransfers(groupId, confirmedTransfersPage)
-                }
-                disabled={loadingConfirmedTransfers}
-              >
-                {loadingConfirmedTransfers ? "Refreshing..." : "Refresh"}
-              </button>
+              <div className="flex items-center gap-1">
+                <span>Amount</span>
+                <button
+                  className={`rounded border px-1 leading-none ${confirmedTransfersSort === "amount,asc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
+                  onClick={() => {
+                    setConfirmedTransfersSort("amount,asc");
+                    if (Number.isFinite(groupId)) {
+                      void loadConfirmedTransfers(
+                        groupId,
+                        1,
+                        confirmedTransfersPageSize,
+                        "amount,asc",
+                      );
+                    }
+                  }}
+                  disabled={loadingConfirmedTransfers}
+                  aria-label="Sort confirmed transfers by amount ascending"
+                >
+                  ▲
+                </button>
+                <button
+                  className={`rounded border px-1 leading-none ${confirmedTransfersSort === "amount,desc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
+                  onClick={() => {
+                    setConfirmedTransfersSort("amount,desc");
+                    if (Number.isFinite(groupId)) {
+                      void loadConfirmedTransfers(
+                        groupId,
+                        1,
+                        confirmedTransfersPageSize,
+                        "amount,desc",
+                      );
+                    }
+                  }}
+                  disabled={loadingConfirmedTransfers}
+                  aria-label="Sort confirmed transfers by amount descending"
+                >
+                  ▼
+                </button>
+              </div>
             </div>
           </div>
 
@@ -3414,6 +2688,7 @@ export default function GroupPage() {
                     currentPage={confirmedTransfersPage}
                     totalPages={confirmedTransfersTotalPages}
                     loading={loadingConfirmedTransfers}
+                    className="mt-3 flex items-center justify-end gap-2 text-xs"
                     onPageChange={(page) =>
                       Number.isFinite(groupId) &&
                       void loadConfirmedTransfers(groupId, page)
@@ -3512,7 +2787,7 @@ export default function GroupPage() {
                       {getShortTimeZoneLabel(event.createdAt)})
                     </div>
                     <div className="mt-2 whitespace-pre-wrap break-words text-[11px] text-slate-500">
-                      {formatEventPayload(event.payload)}
+                      {formatEventPayload(event.payload, memberNameById)}
                     </div>
                   </li>
                 ))}
@@ -3551,6 +2826,7 @@ export default function GroupPage() {
                   currentPage={eventsPage}
                   totalPages={eventsTotalPages}
                   loading={loadingEvents}
+                  className="mt-3 flex items-center justify-end gap-2 text-xs"
                   onPageChange={(page) =>
                     Number.isFinite(groupId) && void loadEvents(groupId, page)
                   }
