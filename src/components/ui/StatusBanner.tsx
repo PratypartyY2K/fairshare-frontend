@@ -24,14 +24,14 @@ export function StatusBanner({
 
   return (
     <div
-      className={`mt-3 flex items-start justify-between gap-3 rounded-xl border px-3 py-2 text-sm ${styles}`}
+      className={`mt-3 flex items-start justify-between gap-3 rounded-2xl border px-3 py-2 text-sm ${styles}`}
     >
       <div className="flex items-start gap-2">
         <span aria-hidden="true">{icon}</span>
         <span>{message}</span>
       </div>
       {onRetry && (
-        <button onClick={onRetry} className="text-xs underline">
+        <button onClick={onRetry} className="btn btn-ghost text-xs">
           Retry
         </button>
       )}

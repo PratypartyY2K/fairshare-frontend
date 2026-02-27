@@ -6,9 +6,9 @@ A Next.js frontend for transparent group expense management with built-in **expl
 
 Unlike basic expense-splitting apps, Fairshare prioritizes transparency and trust:
 
-- **🔍 Explain Tab**: See exactly how each member's balance was calculated — breakdown of every expense, transfer, and contribution that affects their ledger position.
-- **📜 History/Audit Tab**: Complete audit trail of all confirmed transfers and expense changes, with full before/after snapshots for accountability.
-- **⚖️ Smart Settlements**: Automatic settlement suggestions that minimize the number of transfers needed to balance the group.
+- ** Explain Tab**: See exactly how each member's balance was calculated — breakdown of every expense, transfer, and contribution that affects their ledger position.
+- ** History/Audit Tab**: Complete audit trail of all confirmed transfers and expense changes, with full before/after snapshots for accountability.
+- ** Smart Settlements**: Automatic settlement suggestions that minimize the number of transfers needed to balance the group.
 
 These features make Fairshare ideal for groups that value transparency: roommates, travel groups, or any shared expense scenario where trust and clarity matter.
 
@@ -69,7 +69,7 @@ Create `.env.local`:
 NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
 ```
 
-The app fails fast if `NEXT_PUBLIC_API_BASE_URL` is missing.
+If `NEXT_PUBLIC_API_BASE_URL` is not set, the frontend defaults to `/api`.
 
 ## Run
 
@@ -98,7 +98,7 @@ Open `http://localhost:3000`.
 
 ## API Integration
 
-This frontend connects to the Fairshare backend API. 
+This frontend connects to the Fairshare backend API.
 
 **For complete API documentation, refer to the backend's Swagger/OpenAPI specification** — it is the source of truth for all endpoint contracts, request/response schemas, and versioning.
 

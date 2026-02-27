@@ -62,11 +62,11 @@ export function ExistingGroupsSection({
   onCancelEditing: () => void;
 }) {
   return (
-    <div className="mt-6 rounded-2xl border p-4">
-      <h2 className="font-medium">Existing groups</h2>
-      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+    <section className="panel panel-tall fade-rise">
+      <h2 className="section-title">Existing groups</h2>
+      <div className="mt-4 flex flex-col gap-2 sm:flex-row">
         <input
-          className="flex-1 rounded-xl border px-3 py-2 text-sm outline-none"
+          className="field flex-1 text-sm"
           placeholder="Filter by group name (supports * and ?)"
           value={groupFilterInput}
           onChange={(e) => setGroupFilterInput(e.target.value)}
@@ -78,7 +78,7 @@ export function ExistingGroupsSection({
         />
         <button
           onClick={() => setGroupFilterApplied(groupFilterInput.trim())}
-          className="rounded-xl border px-4 py-2 text-sm"
+          className="btn btn-primary text-sm"
           disabled={loadingGroups}
         >
           Apply
@@ -88,7 +88,7 @@ export function ExistingGroupsSection({
             setGroupFilterInput("");
             setGroupFilterApplied("");
           }}
-          className="rounded-xl border px-4 py-2 text-sm"
+          className="btn btn-ghost text-sm"
           disabled={loadingGroups || (!groupFilterInput && !groupFilterApplied)}
         >
           Clear
@@ -123,11 +123,11 @@ export function ExistingGroupsSection({
       )}
       {!loadingGroups && !groupsError && filteredGroups.length > 0 && (
         <>
-          <div className="mt-3 grid grid-cols-[1fr_auto_auto] items-center gap-2 px-2 text-xs uppercase tracking-wide text-gray-500">
+          <div className="mt-4 grid grid-cols-[1fr_auto_auto] items-center gap-2 rounded-xl bg-[var(--panel-strong)] px-3 py-2 text-xs uppercase tracking-[0.08em] text-[var(--text-muted)]">
             <div className="flex items-center gap-1">
               <span>Name</span>
               <button
-                className={`rounded border px-1 leading-none ${groupsSort === "name,asc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
+                className={`btn btn-sort ${groupsSort === "name,asc" ? "btn-sort-active" : ""}`}
                 onClick={() => setGroupsSort("name,asc")}
                 disabled={loadingGroups}
                 aria-label="Sort name ascending"
@@ -135,7 +135,7 @@ export function ExistingGroupsSection({
                 ▲
               </button>
               <button
-                className={`rounded border px-1 leading-none ${groupsSort === "name,desc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
+                className={`btn btn-sort ${groupsSort === "name,desc" ? "btn-sort-active" : ""}`}
                 onClick={() => setGroupsSort("name,desc")}
                 disabled={loadingGroups}
                 aria-label="Sort name descending"
@@ -146,7 +146,7 @@ export function ExistingGroupsSection({
             <div className="flex items-center justify-end gap-1">
               <span>Members</span>
               <button
-                className={`rounded border px-1 leading-none ${groupsSort === "memberCount,asc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
+                className={`btn btn-sort ${groupsSort === "memberCount,asc" ? "btn-sort-active" : ""}`}
                 onClick={() => setGroupsSort("memberCount,asc")}
                 disabled={loadingGroups}
                 aria-label="Sort members ascending"
@@ -154,7 +154,7 @@ export function ExistingGroupsSection({
                 ▲
               </button>
               <button
-                className={`rounded border px-1 leading-none ${groupsSort === "memberCount,desc" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}
+                className={`btn btn-sort ${groupsSort === "memberCount,desc" ? "btn-sort-active" : ""}`}
                 onClick={() => setGroupsSort("memberCount,desc")}
                 disabled={loadingGroups}
                 aria-label="Sort members descending"
@@ -166,11 +166,11 @@ export function ExistingGroupsSection({
           </div>
           <ul className="mt-3 space-y-2">
             {filteredGroups.map((group) => (
-              <li key={group.id} className="rounded-xl border px-3 py-2">
+              <li key={group.id} className="group-row">
                 {editingGroupId === group.id ? (
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                     <input
-                      className="flex-1 rounded-xl border px-3 py-2 outline-none"
+                      className="field flex-1"
                       value={editingGroupName}
                       onChange={(e) => setEditingGroupName(e.target.value)}
                       placeholder="Group name"
@@ -179,14 +179,14 @@ export function ExistingGroupsSection({
                       <button
                         onClick={() => onSaveGroupName(group.id)}
                         disabled={savingGroupId === group.id || !editingGroupName.trim()}
-                        className="rounded-xl border px-4 py-2 disabled:opacity-50"
+                        className="btn btn-primary disabled:opacity-50"
                       >
                         {savingGroupId === group.id ? "Saving..." : "Save"}
                       </button>
                       <button
                         onClick={onCancelEditing}
                         disabled={savingGroupId === group.id}
-                        className="rounded-xl border px-4 py-2 disabled:opacity-50"
+                        className="btn btn-ghost disabled:opacity-50"
                       >
                         Cancel
                       </button>
@@ -194,11 +194,11 @@ export function ExistingGroupsSection({
                   </div>
                 ) : (
                   <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2">
-                    <Link className="underline" href={`/groups/${group.id}`}>
+                    <Link className="link-accent" href={`/groups/${group.id}`}>
                       {group.name?.trim() ? group.name : `Group #${group.id}`}
                     </Link>
-                    <span className="text-sm text-gray-600">{getGroupMembersCount(group) ?? "—"}</span>
-                    <button onClick={() => onStartEditing(group)} className="text-sm underline">
+                    <span className="text-sm text-[var(--text-muted)]">{getGroupMembersCount(group) ?? "—"}</span>
+                    <button onClick={() => onStartEditing(group)} className="btn btn-ghost text-sm">
                       Rename
                     </button>
                   </div>
@@ -216,15 +216,15 @@ export function ExistingGroupsSection({
         </>
       )}
       {!loadingGroups && !groupsError && groupsTotalItems > 0 && (
-        <div className="mt-3 flex items-center justify-between text-sm text-gray-600">
+        <div className="mt-4 flex flex-col gap-3 text-sm text-[var(--text-muted)] lg:flex-row lg:items-center lg:justify-between">
           <span>
             Page {groupsPage} of {groupsTotalPages} ({groupsTotalItems} groups total)
           </span>
           <div className="flex items-center gap-3">
-            <label className="flex items-center gap-2 text-xs text-gray-600">
+            <label className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
               <span>Page size</span>
               <select
-                className="rounded-xl border px-2 py-1"
+                className="field py-1"
                 value={groupsPageSize}
                 onChange={(e) => setGroupsPageSize(Number(e.target.value))}
                 disabled={loadingGroups}
@@ -245,6 +245,6 @@ export function ExistingGroupsSection({
           </div>
         </div>
       )}
-    </div>
+    </section>
   );
 }

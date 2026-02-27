@@ -32,7 +32,7 @@ export function PaginationControls({
       <button
         onClick={() => onPageChange(currentPage - 1)}
         disabled={loading || currentPage <= 1}
-        className="rounded-xl border px-3 py-1 disabled:opacity-50"
+        className="btn btn-ghost py-1 disabled:opacity-50"
       >
         Previous
       </button>
@@ -44,11 +44,7 @@ export function PaginationControls({
             <button
               onClick={() => onPageChange(page)}
               disabled={loading}
-              className={`rounded-xl border px-3 py-1 disabled:opacity-50 ${
-                page === currentPage
-                  ? "border-slate-900 bg-slate-900 font-semibold text-white ring-2 ring-slate-300"
-                  : "border-slate-300 bg-white"
-              }`}
+              className={`btn py-1 disabled:opacity-50 ${page === currentPage ? "btn-primary" : "btn-ghost"}`}
             >
               {page}
             </button>
@@ -58,7 +54,7 @@ export function PaginationControls({
       <button
         onClick={() => onPageChange(currentPage + 1)}
         disabled={loading || currentPage >= totalPages}
-        className="rounded-xl border px-3 py-1 disabled:opacity-50"
+        className="btn btn-ghost py-1 disabled:opacity-50"
       >
         Next
       </button>

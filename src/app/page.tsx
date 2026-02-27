@@ -191,58 +191,72 @@ export default function HomePage() {
   }
 
   return (
-    <main className="min-h-screen p-6 max-w-2xl mx-auto">
-      <h1 className="text-2xl font-semibold">Fairshare</h1>
-      <p className="text-sm text-gray-500 mt-1">
-        MVP: create a group → add members → add expenses → settlements
-      </p>
+    <main className="home-shell">
+      <section className="hero-card fade-rise">
+        <p className="hero-kicker">Shared money, less friction</p>
+        <h1 className="hero-title">Fairshare</h1>
+        <p className="hero-subtitle">
+          Plan trips, home budgets, and weekend tabs with a clean flow for
+          groups, expenses, and settlements.
+        </p>
+        <div className="hero-steps">
+          <span>Create</span>
+          <span>Add members</span>
+          <span>Track expenses</span>
+          <span>Settle up</span>
+        </div>
+      </section>
 
-      <CreateGroupSection
-        groupName={groupName}
-        loading={loading}
-        createGroupError={createGroupError}
-        createdGroup={createdGroup}
-        setGroupName={setGroupName}
-        onCreateGroup={onCreateGroup}
-      />
+      <div className="home-grid">
+        <div className="space-y-6">
+          <CreateGroupSection
+            groupName={groupName}
+            loading={loading}
+            createGroupError={createGroupError}
+            createdGroup={createdGroup}
+            setGroupName={setGroupName}
+            onCreateGroup={onCreateGroup}
+          />
 
-      <ApiStatusSection
-        loadingStatus={loadingStatus}
-        rootStatus={rootStatus}
-        healthStatus={healthStatus}
-        statusError={statusError}
-        loadStatus={loadStatus}
-      />
+          <ApiStatusSection
+            loadingStatus={loadingStatus}
+            rootStatus={rootStatus}
+            healthStatus={healthStatus}
+            statusError={statusError}
+            loadStatus={loadStatus}
+          />
+        </div>
 
-      <ExistingGroupsSection
-        groupFilterInput={groupFilterInput}
-        groupFilterApplied={groupFilterApplied}
-        loadingGroups={loadingGroups}
-        groupsError={groupsError}
-        filteredGroups={filteredGroups}
-        groupsTotalItems={groupsTotalItems}
-        groupsPage={groupsPage}
-        groupsTotalPages={groupsTotalPages}
-        groupsPageSize={groupsPageSize}
-        groupsSort={groupsSort}
-        serverFilterApplied={serverFilterApplied}
-        editingGroupId={editingGroupId}
-        editingGroupName={editingGroupName}
-        savingGroupId={savingGroupId}
-        renameError={renameError}
-        setGroupFilterInput={setGroupFilterInput}
-        setGroupFilterApplied={setGroupFilterApplied}
-        setGroupsPageSize={setGroupsPageSize}
-        setGroupsSort={setGroupsSort}
-        setEditingGroupName={setEditingGroupName}
-        onReload={(page) => void loadGroups(page, groupFilterApplied)}
-        onSaveGroupName={(groupId) => void saveGroupName(groupId)}
-        onStartEditing={startEditingGroup}
-        onCancelEditing={() => {
-          setEditingGroupId(null);
-          setEditingGroupName("");
-        }}
-      />
+        <ExistingGroupsSection
+          groupFilterInput={groupFilterInput}
+          groupFilterApplied={groupFilterApplied}
+          loadingGroups={loadingGroups}
+          groupsError={groupsError}
+          filteredGroups={filteredGroups}
+          groupsTotalItems={groupsTotalItems}
+          groupsPage={groupsPage}
+          groupsTotalPages={groupsTotalPages}
+          groupsPageSize={groupsPageSize}
+          groupsSort={groupsSort}
+          serverFilterApplied={serverFilterApplied}
+          editingGroupId={editingGroupId}
+          editingGroupName={editingGroupName}
+          savingGroupId={savingGroupId}
+          renameError={renameError}
+          setGroupFilterInput={setGroupFilterInput}
+          setGroupFilterApplied={setGroupFilterApplied}
+          setGroupsPageSize={setGroupsPageSize}
+          setGroupsSort={setGroupsSort}
+          setEditingGroupName={setEditingGroupName}
+          onReload={(page) => void loadGroups(page, groupFilterApplied)}
+          onSaveGroupName={(groupId) => void saveGroupName(groupId)}
+          onStartEditing={startEditingGroup}
+          onCancelEditing={() => {
+            setEditingGroupId(null);
+            setEditingGroupName("");
+          }}
+        />
+      </div>
     </main>
   );
 }

@@ -14,24 +14,24 @@ export function ApiStatusSection({
   loadStatus: () => void;
 }) {
   return (
-    <div className="mt-6 rounded-2xl border p-4">
+    <section className="panel fade-rise">
       <div className="flex items-center justify-between">
-        <h2 className="font-medium">API status</h2>
+        <h2 className="section-title">API status</h2>
         <button
           onClick={loadStatus}
-          className="text-sm underline"
+          className="btn btn-ghost text-sm"
           disabled={loadingStatus}
         >
           {loadingStatus ? "Refreshing..." : "Refresh"}
         </button>
       </div>
-      <div className="mt-3 space-y-2 text-sm text-gray-600">
+      <div className="mt-4 space-y-2 text-sm text-[var(--text-muted)]">
         <div>Root (/): {loadingStatus ? "Loading..." : rootStatus}</div>
         <div>Health (/health): {loadingStatus ? "Loading..." : healthStatus}</div>
       </div>
       {statusError && (
         <StatusBanner variant="error" message={statusError} onRetry={loadStatus} />
       )}
-    </div>
+    </section>
   );
 }

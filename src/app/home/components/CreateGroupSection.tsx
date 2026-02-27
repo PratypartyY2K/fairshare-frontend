@@ -18,12 +18,12 @@ export function CreateGroupSection({
   onCreateGroup: () => void;
 }) {
   return (
-    <div className="mt-6 rounded-2xl border p-4">
-      <h2 className="font-medium">Create a group</h2>
+    <section className="panel fade-rise">
+      <h2 className="section-title">Create a group</h2>
 
-      <div className="mt-3 flex gap-2">
+      <div className="mt-4 flex gap-2">
         <input
-          className="flex-1 rounded-xl border px-3 py-2 outline-none"
+          className="field flex-1"
           placeholder="e.g., Roommates"
           value={groupName}
           onChange={(e) => setGroupName(e.target.value)}
@@ -31,7 +31,7 @@ export function CreateGroupSection({
         <button
           onClick={onCreateGroup}
           disabled={!groupName.trim() || loading}
-          className="rounded-xl border px-4 py-2 disabled:opacity-50"
+          className="btn btn-primary disabled:opacity-50"
         >
           {loading ? "Creating..." : "Create"}
         </button>
@@ -47,13 +47,13 @@ export function CreateGroupSection({
       )}
 
       {createdGroup !== null && (
-        <div className="mt-4 text-sm">
+        <div className="mt-4 text-sm text-[var(--text-muted)]">
           Created group:{" "}
-          <Link className="underline" href={`/groups/${createdGroup.id}`}>
+          <Link className="link-accent" href={`/groups/${createdGroup.id}`}>
             {createdGroup.name}
           </Link>
         </div>
       )}
-    </div>
+    </section>
   );
 }
