@@ -7,6 +7,7 @@ export type GroupResponse = {
   id: number;
   name?: string;
   members: Member[];
+  actorUserId?: number | null;
 };
 
 export type Split = {

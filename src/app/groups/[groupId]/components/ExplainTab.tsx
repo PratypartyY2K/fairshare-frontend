@@ -8,7 +8,6 @@ export function ExplainTab({
   ledgerExplanationError,
   loadLedgerExplanation,
   currentUserId,
-  setCurrentUserId,
   members,
   getMemberName,
   selectedLedgerExplanationUserId,
@@ -25,7 +24,6 @@ export function ExplainTab({
   ledgerExplanationError: string | null;
   loadLedgerExplanation: (gid: number) => Promise<void>;
   currentUserId: number | "";
-  setCurrentUserId: (value: number | "") => void;
   members: Member[];
   getMemberName: (member: Member) => string;
   selectedLedgerExplanationUserId: number | "";
@@ -39,6 +37,14 @@ export function ExplainTab({
   getShortTimeZoneLabel: (dateInput: string) => string;
   memberNameById: Map<number, string>;
 }) {
+  const authenticatedUserLabel =
+    currentUserId === ""
+      ? "Unavailable"
+      : (() => {
+          const currentMember = members.find((member) => member.id === currentUserId);
+          return currentMember ? getMemberName(currentMember) : `User #${currentUserId}`;
+        })();
+
   return (
     <div className={sectionClass}>
       <div className="flex items-center justify-between">
@@ -73,21 +79,16 @@ export function ExplainTab({
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <div>
             <label className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-              Current user
+              Authenticated user
             </label>
-            <select
+            <input
               className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
-              value={currentUserId}
-              onChange={(e) => setCurrentUserId(e.target.value ? Number(e.target.value) : "")}
-            >
-              <option value="">Select current user</option>
-              {members.map((member) => (
-                <option key={member.id} value={member.id}>
-                  {getMemberName(member)}
-                </option>
-              ))}
-            </select>
-            <p className="mt-1 text-[11px] text-slate-500">Explain defaults to this member.</p>
+              value={authenticatedUserLabel}
+              readOnly
+            />
+            <p className="mt-1 text-[11px] text-slate-500">
+              Derived from the authenticated session.
+            </p>
           </div>
           <div>
             <label className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">

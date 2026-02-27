@@ -117,7 +117,6 @@ export default function GroupPage() {
     ledgerExplanationError,
     loadLedgerExplanation,
     currentUserId,
-    setCurrentUserId,
     selectedLedgerExplanationUserId,
     setSelectedLedgerExplanationUserId,
     ledgerExplanationEntries,
@@ -300,7 +299,6 @@ export default function GroupPage() {
           ledgerExplanationError={ledgerExplanationError}
           loadLedgerExplanation={loadLedgerExplanation}
           currentUserId={currentUserId}
-          setCurrentUserId={setCurrentUserId}
           members={members}
           getMemberName={getMemberName}
           selectedLedgerExplanationUserId={selectedLedgerExplanationUserId}

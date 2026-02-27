@@ -37,13 +37,6 @@ export function useGroupPageController() {
     const parts = pathname.split("/").filter(Boolean);
     return Number(parts[1]);
   }, [pathname]);
-  const currentUserStorageKey = useMemo(
-    () =>
-      Number.isFinite(groupId)
-        ? `fairshare:group:${groupId}:current-user-id`
-        : "",
-    [groupId],
-  );
 
   const [members, setMembers] = useState<Member[]>([]);
   const [userName, setUserName] = useState("");
@@ -255,8 +248,18 @@ export function useGroupPageController() {
     setLoadingMembers(true);
     try {
       const group = await api<GroupResponse>(`/groups/${gid}`);
-      setMembers(group.members ?? []);
+      const groupMembers = group.members ?? [];
+      setMembers(groupMembers);
       setGroupName(group.name ?? null);
+      const actorUserId = Number(group.actorUserId);
+      if (
+        Number.isFinite(actorUserId) &&
+        groupMembers.some((member) => member.id === actorUserId)
+      ) {
+        setCurrentUserId(actorUserId);
+      } else {
+        setCurrentUserId("");
+      }
     } catch (e: unknown) {
       const message =
         e instanceof Error ? (e.message ?? "Failed to load group") : String(e);
@@ -287,46 +290,13 @@ export function useGroupPageController() {
   );
 
   useEffect(() => {
-    if (!currentUserStorageKey) {
-      setCurrentUserId("");
-      return;
-    }
-
-    try {
-      const stored = window.localStorage.getItem(currentUserStorageKey);
-      if (!stored) return;
-      const parsed = Number(stored);
-      if (Number.isFinite(parsed)) {
-        setCurrentUserId(parsed);
-      }
-    } catch {
-      // Ignore localStorage access issues in restricted environments.
-    }
-  }, [currentUserStorageKey]);
-
-  useEffect(() => {
-    if (members.length === 0) {
-      setCurrentUserId("");
-      return;
-    }
-
     setCurrentUserId((prev) => {
       if (prev !== "" && members.some((member) => member.id === prev)) {
         return prev;
       }
-      return members[0].id;
+      return "";
     });
   }, [members]);
-
-  useEffect(() => {
-    if (!currentUserStorageKey || currentUserId === "") return;
-
-    try {
-      window.localStorage.setItem(currentUserStorageKey, String(currentUserId));
-    } catch {
-      // Ignore localStorage access issues in restricted environments.
-    }
-  }, [currentUserStorageKey, currentUserId]);
 
   useEffect(() => {
     setSelectedLedgerExplanationUserId((prev) => {
@@ -1072,7 +1042,6 @@ export function useGroupPageController() {
     ledgerExplanationError,
     loadLedgerExplanation,
     currentUserId,
-    setCurrentUserId,
     selectedLedgerExplanationUserId,
     setSelectedLedgerExplanationUserId,
     ledgerExplanationEntries,
