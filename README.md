@@ -1,116 +1,196 @@
 # Fairshare Frontend
 
-A Next.js frontend for transparent group expense management with built-in **explainability** and **audit history**.
+The Fairshare frontend is a Next.js application for inspecting, editing, and explaining shared group expenses.
 
-## Why Fairshare?
+Its job is not just to collect form input. The UI is meant to expose the value of the system: balances should be understandable, settlement flows should be trustworthy, and historical changes should be visible rather than hidden behind a single total.
 
-Unlike basic expense-splitting apps, Fairshare prioritizes transparency and trust:
+## Why This Frontend Matters
 
-- ** Explain Tab**: See exactly how each member's balance was calculated — breakdown of every expense, transfer, and contribution that affects their ledger position.
-- ** History/Audit Tab**: Complete audit trail of all confirmed transfers and expense changes, with full before/after snapshots for accountability.
-- ** Smart Settlements**: Automatic settlement suggestions that minimize the number of transfers needed to balance the group.
+Most expense-sharing interfaces optimize for speed and minimal friction, but they often hide the reasoning behind the numbers. Fairshare takes the opposite approach.
 
-These features make Fairshare ideal for groups that value transparency: roommates, travel groups, or any shared expense scenario where trust and clarity matter.
+This frontend is designed to help users answer questions like:
 
-## Why Fairshare?
+- What do I owe right now?
+- Why do I owe it?
+- Which expenses contributed to that amount?
+- Which transfers have already been confirmed?
+- How did the group state change over time?
 
-Unlike traditional expense-splitting apps, Fairshare provides:
+The backend provides the accounting model. The frontend makes that model legible.
 
-- **Explainable ledgers**: Understand exactly why you owe what you owe with detailed breakdowns
-- **Audit trail**: Complete history of edits, voids, and transfers for transparency and accountability
-- **Deterministic rounding + idempotent actions**: Consistent, repeatable operations that prevent double-charging
-- **Fairness-aware splitting** _(coming soon)_: Advanced algorithms for equitable expense distribution
+## Product Goals
 
-## Quickstart: Running the Full System
+- Make shared-expense accounting understandable, not just usable.
+- Surface ledger outcomes without requiring users to trust a black box.
+- Keep core group workflows simple while preserving access to history and explanation.
+- Support real product flows such as retries, pagination, filtering, and error recovery.
 
-```bash
-# 1. Clone the repository (if needed)
-git clone https://github.com/PratypartyY2K/fairshare-frontend.git
-cd fairshare-frontend
+## User Experience Model
 
-# 2. Initialize submodules (if backend is included as a submodule)
-git submodule update --init --recursive
+### Home Page
 
-# 3. Run the backend (adjust according to your backend setup)
-# Example: cd backend && ./gradlew bootRun
-# Or: cd backend && npm start
-# Backend typically runs on http://localhost:8080
+The landing flow is intentionally operational:
 
-# 4. Set up frontend environment
-cp .env.local.example .env.local  # Or create .env.local manually
-# Add: NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
+- verify backend connectivity
+- create groups
+- rename groups
+- browse groups with filtering, sorting, and pagination
 
-# 5. Run the frontend
-npm install
-npm run dev
+The home page acts as the control surface for entering the system, not just a static dashboard.
 
-# 6. Access the application
-# Frontend: http://localhost:3000
-# Backend API docs (Swagger): http://localhost:8080/swagger-ui.html
-```
+### Group Workspace
+
+Each group is treated as a workspace with focused tabs for:
+
+- members
+- expenses
+- settlements
+- ledger explanation
+- history
+
+That keeps the UI aligned with the backend model. Users can move from creating an expense to understanding ledger impact to confirming transfers, all inside a single group context.
+
+### Explainability
+
+The explain and history views are the main differentiators of the product. They expose the reasoning behind balances and make the system feel accountable rather than opaque.
 
 ## Tech Stack
 
-- Next.js `16.1.4` (App Router)
-- React `19.2.3`
-- TypeScript `5`
-- Tailwind CSS `4`
+- Next.js 16.1.6
+- React 19.2.3
+- TypeScript 5
+- Tailwind CSS 4
 
-## Prerequisites
+## Frontend Capabilities
 
-- Node.js 18+
-- A running backend API
+### Group Management
 
-## Environment
+- Create groups
+- Rename groups
+- Browse groups with search, sorting, and pagination
 
-Create `.env.local`:
+### Members
+
+- Add members to a group
+- View current group membership
+
+### Expenses
+
+- Create expenses
+- Edit expenses
+- Delete expenses
+- Support equal, exact amount, percentage, and share-based split modes
+
+### Settlements And Ledger
+
+- View settlement suggestions
+- Confirm transfers
+- Inspect current ledger balances
+- Query owes relationships
+
+### Explainability And History
+
+- View per-user ledger explanations
+- Inspect expense event history
+- Inspect confirmed transfer history
+- Filter and page through historical records
+
+## Local Run
+
+Install dependencies:
+
+```bash
+npm install
+```
+
+Start the backend first on `http://localhost:8080`, then create `.env.local`.
+
+Recommended direct-backend setup:
 
 ```bash
 NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
 ```
 
-If `NEXT_PUBLIC_API_BASE_URL` is not set, the frontend defaults to `/api`.
-
-## Run
+Optional rewrite-based setup:
 
 ```bash
-npm install
+NEXT_PUBLIC_API_BASE_URL=http://localhost:3000/api
+BACKEND_URL=http://localhost:8080
+```
+
+Then start the app:
+
+```bash
 npm run dev
 ```
 
 Open `http://localhost:3000`.
 
-## NPM Scripts
+## API Integration Modes
 
-- `npm run dev`: Start development server.
-- `npm run build`: Build production bundle.
-- `npm run start`: Run production server.
-- `npm run lint`: Run ESLint.
+The frontend supports two local integration styles.
 
-## Core Features
+Direct browser-to-backend mode:
 
-- **Group Management**: Create groups, add members, track shared expenses
-- **Flexible Expense Splits**: Equal, exact amounts, percentages, or custom shares
-- **Smart Settlements**: Minimized transfer suggestions with idempotent confirmation
-- **Ledger Explanation**: Per-member breakdown showing how balances are calculated
-- **Audit History**: Complete timeline of confirmed transfers and expense modifications
-- **Advanced Filtering**: Wildcard search, pagination, and sorting across all views
+- `NEXT_PUBLIC_API_BASE_URL=http://localhost:8080`
+- the browser calls the Spring backend directly
+- this depends on backend CORS allowing `http://localhost:3000`
 
-## API Integration
+Rewrite-based mode:
 
-This frontend connects to the Fairshare backend API.
+- `NEXT_PUBLIC_API_BASE_URL=http://localhost:3000/api`
+- Next.js rewrites `/api/:path*` to `BACKEND_URL` or `http://localhost:8080`
+- this is useful when you want the frontend to proxy backend requests through Next
 
-**For complete API documentation, refer to the backend's Swagger/OpenAPI specification** — it is the source of truth for all endpoint contracts, request/response schemas, and versioning.
+`NEXT_PUBLIC_API_BASE_URL` must be set. The shared API client expects it at runtime.
 
-### API Compatibility
+## Architecture Notes
 
-- The frontend requires `NEXT_PUBLIC_API_BASE_URL` to be configured (see Environment section above)
-- API endpoints are versioned and must match the backend's published contracts
-- When integrating new backend features, always verify against the latest Swagger documentation
-- Key integration points: groups, members, expenses, settlements, ledger explanations, and audit events
+The frontend is organized around two major surfaces:
 
-## Developer Documentation
+- the home page, which owns group discovery and creation flows
+- the group page, which acts as a single workspace for members, expenses, settlement, explanation, and history
 
-For detailed technical documentation including file structure and implementation details, see:
+API access is centralized in [src/lib/api.ts](/Users/pratyushkumar/Desktop/Pratyush/faireshare-mono-repo/fairshare-frontend/src/lib/api.ts). Shared pagination and response typing live in [src/lib/pagination.ts](/Users/pratyushkumar/Desktop/Pratyush/faireshare-mono-repo/fairshare-frontend/src/lib/pagination.ts).
 
-- **[Architecture Guide](docs/ARCHITECTURE.md)**: Complete file-by-file breakdown of the codebase
+The group page intentionally centralizes most orchestration in [src/app/groups/[groupId]/useGroupPageController.ts](/Users/pratyushkumar/Desktop/Pratyush/faireshare-mono-repo/fairshare-frontend/src/app/groups/[groupId]/useGroupPageController.ts), while tab components focus on rendering and interaction boundaries. That tradeoff favors feature velocity and shared state coordination across multiple group-level workflows.
+
+Additional implementation notes are in [docs/ARCHITECTURE.md](/Users/pratyushkumar/Desktop/Pratyush/faireshare-mono-repo/fairshare-frontend/docs/ARCHITECTURE.md).
+
+## Verification
+
+Lint:
+
+```bash
+npm run lint
+```
+
+Production build:
+
+```bash
+npm run build -- --webpack
+```
+
+Production server:
+
+```bash
+npm run start
+```
+
+## Common Problems
+
+If the app fails early because `NEXT_PUBLIC_API_BASE_URL` is missing:
+
+- add `.env.local`
+- set `NEXT_PUBLIC_API_BASE_URL`
+- restart the dev server or rerun the build
+
+If the UI shows `/api/...` 404 responses:
+
+- confirm whether `.env.local` points to `http://localhost:8080` or `http://localhost:3000/api`
+- if using rewrite mode, restart Next after changing env or config
+- confirm the backend is running on `http://localhost:8080`
+
+If direct browser calls to `http://localhost:8080` fail:
+
+- confirm backend CORS still allows `http://localhost:3000`
