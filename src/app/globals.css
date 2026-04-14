@@ -29,6 +29,12 @@
       radial-gradient(circle at 90% 0%, rgba(16, 95, 98, 0.18), transparent 32%),
       linear-gradient(140deg, var(--bg), var(--bg-2));
   }
+
+  ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
 }
 
 @layer components {
